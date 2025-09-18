@@ -6,7 +6,6 @@ import os
 input_folder = "/Users/lauraponoran/Downloads"
 
 # CSV files and output GeoJSON names
-# CSV files and output GeoJSON names
 trips = {
     "602DE_17_09_2025_19_28_37.csv": "602DE_Trip6.geojson",
 }
