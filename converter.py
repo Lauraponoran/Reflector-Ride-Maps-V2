@@ -1,17 +1,39 @@
 import csv
 import json
 import os
+import sys
 
-# Input folder
-input_folder = "/Users/lauraponoran/Downloads"
+# Get input folder
+if len(sys.argv) > 1:
+    input_folder = sys.argv[1]
+else:
+    input_folder = input("Enter input folder path (leave empty for current folder): ").strip() or os.getcwd()
 
-# CSV files and output GeoJSON names
-trips = {
-    "602D3_23_09_2025_09_22_06.csv": "602D3_Trip1.geojson",
-    "602D3_22_09_2025_13_10_41.csv": "602D3_Trip2.geojson",
-    "602D3_22_09_2025_12_46_08.csv": "602D3_Trip3.geojson",
-    "604E9_23_09_2025_09_16_07.csv": "604E9_Trip9.geojson",
-}
+print(f"Using input folder: {input_folder}")
+
+# Find all CSV files in the folder
+csv_files = [f for f in os.listdir(input_folder) if f.lower().endswith(".csv")]
+
+trips = {}
+
+for csv_file in csv_files:
+    # Get first 5 chars of the CSV filename (sensor ID)
+    sensor_id = csv_file[:5]
+
+    # Ask user for trip number
+    while True:
+        trip_num = input(f"Enter trip number for {csv_file} (sensor {sensor_id}): ").strip()
+        if trip_num.isdigit():
+            break
+        print("Please enter a valid number.")
+
+    # Build GeoJSON filename
+    geojson_file = f"{sensor_id}_Trip{trip_num}.geojson"
+    trips[csv_file] = geojson_file
+
+print("\nPlanned conversions:")
+for csv_file, geojson_file in trips.items():
+    print(f"  {csv_file} -> {geojson_file}")
 
 for csv_file, geojson_file in trips.items():
     input_path = os.path.join(input_folder, csv_file)
