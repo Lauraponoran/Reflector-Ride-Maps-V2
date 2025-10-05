@@ -24,24 +24,32 @@ const map = new mapboxgl.Map({
   zoom: 12
 });
 
-map.on('load', () => {
+map.on('load', async () => {
   // Add PMTiles vector source
   map.addSource('trips', {
     type: 'vector',
-    url: 'http://localhost:8080/data/trips.json'
-});
+    url: 'http://localhost:8080/data/pmtiles.json'
+  });
 
-map.addLayer({
-  id: 'trip-lines',
-  type: 'line',
-  source: 'trips',
-  'source-layer': 'pmtiles', // <-- this must match the identifier from tileserver
-  paint: {
-    'line-color': '#FF6600',
-    'line-width': 2
-  }
-});
+  // Fetch TileJSON to get all layer IDs
+  const response = await fetch('http://localhost:8080/data/pmtiles.json');
+  const tileJSON = await response.json();
 
+  const tripLayers = tileJSON.vector_layers.map(layer => layer.id);
+
+  // Add a line layer for each trip
+  tripLayers.forEach(layerId => {
+    map.addLayer({
+      id: layerId,
+      type: 'line',
+      source: 'trips',
+      'source-layer': layerId,
+      paint: {
+        'line-color': '#FF6600',
+        'line-width': 2
+      }
+    });
+  });
 });
 </script>
 </body>
