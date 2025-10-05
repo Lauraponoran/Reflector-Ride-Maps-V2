@@ -14,9 +14,6 @@
 <body>
 <div id="map"></div>
 
-<!-- Load generated JS file -->
-<script src="geojson_files.js"></script>
-
 <script>
 mapboxgl.accessToken = 'YOUR_MAPBOX_TOKEN_HERE';
 
@@ -28,41 +25,22 @@ const map = new mapboxgl.Map({
 });
 
 map.on('load', () => {
-  geojsonFiles.forEach((url, idx) => {
-    map.addSource('trip' + idx, {
-      type: 'geojson',
-      data: url
-    });
+  // Add PMTiles vector source
+  map.addSource('trips', {
+    type: 'vector',
+    url: 'http://localhost:8080/data/trips.json'
+  });
 
-    map.addLayer({
-      id: 'trip-line-' + idx,
-      type: 'line',
-      source: 'trip' + idx,
-      paint: {
-        'line-width': 3,
-        'line-color': [
-          'interpolate', ['linear'], ['get', 'Speed'],
-          0, '#4575b4',
-          20, '#fee090',
-          40, '#d73027'
-        ]
-      }
-    });
-
-    map.on('click', 'trip-line-' + idx, (e) => {
-      const props = e.features[0].properties;
-      let content = '';
-      for (const [k,v] of Object.entries(props)) {
-        content += `<strong>${k}:</strong> ${v}<br>`;
-      }
-      new mapboxgl.Popup()
-        .setLngLat(e.lngLat)
-        .setHTML(content)
-        .addTo(map);
-    });
-
-    map.on('mouseenter', 'trip-line-' + idx, () => map.getCanvas().style.cursor = 'pointer');
-    map.on('mouseleave', 'trip-line-' + idx, () => map.getCanvas().style.cursor = '');
+  // Add line layer
+  map.addLayer({
+    id: 'trip-lines',
+    type: 'line',
+    source: 'trips',
+    'source-layer': 'trips', // this is usually the name of the layer inside your PMTiles
+    paint: {
+      'line-color': '#FF6600',
+      'line-width': 2
+    }
   });
 });
 </script>
