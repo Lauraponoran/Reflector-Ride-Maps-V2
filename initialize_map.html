@@ -37,36 +37,19 @@
 <script>
   mapboxgl.accessToken = 'pk.eyJ1IjoibGF1cmFwb25vcmFuIiwiYSI6ImNtZ2U5d2U1dDFvazAybHM3a3Z1MWV0NmoifQ.lkO31BX5zlftfC2w412m2Q';
 
+  // Initialize the map using your PMTiles style from TileServer GL
   const map = new mapboxgl.Map({
     container: 'map',
-    style: 'mapbox://styles/mapbox/light-v11', // or your PMTiles base
+    style: 'http://localhost:8080/styles/bright/style.json', // replace with your TileServer GL style URL
     center: [4.9, 52.37], // Amsterdam
     zoom: 11
   });
 
   map.on('load', function() {
-    // --- 1. Load your PMTiles layer as usual ---
-    // Example for PMTiles source:
-    map.addSource('trips', {
-      type: 'vector',
-      url: 'http://localhost:8000/sensor_data/trips.pmtiles'
-    });
-
-    map.addLayer({
-      id: 'trips-layer',
-      type: 'line',
-      source: 'trips',
-      'source-layer': 'trips', // adjust if necessary
-      paint: {
-        'line-color': '#FF5733',
-        'line-width': 1
-      }
-    });
-
-    // --- 2. Add Amsterdam GeoJSON overlay ---
+    // --- 1. Add Amsterdam GeoJSON overlay ---
     map.addSource('amsterdam', {
       type: 'geojson',
-      data: 'amsterdam_grid_wgs84.geojson'
+      data: 'http://localhost:8000/amsterdam_grid_wgs84.geojson'
     });
 
     map.addLayer({
@@ -87,7 +70,7 @@
       }
     });
 
-    // --- 3. Add slider filter ---
+    // --- 2. Add slider filter ---
     const slider = document.getElementById('densitySlider');
     const sliderValue = document.getElementById('sliderValue');
 
@@ -96,6 +79,9 @@
       sliderValue.textContent = value;
       map.setFilter('amsterdam-layer', ['>=', ['get', 'omgevingsadressendichtheid'], value]);
     });
+
+    // Optional: initialize filter at 0
+    map.setFilter('amsterdam-layer', ['>=', ['get', 'omgevingsadressendichtheid'], 0]);
   });
 </script>
 
