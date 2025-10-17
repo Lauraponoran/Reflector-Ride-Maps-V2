@@ -2,12 +2,16 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Amsterdam Scaled Grid + Trips</title>
+  <title>Amsterdam Trips + Ambulance Scaled Grid</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
+  <!-- Mapbox + Turf -->
   <link href="https://api.mapbox.com/mapbox-gl-js/v2.22.0/mapbox-gl.css" rel="stylesheet">
   <script src="https://api.mapbox.com/mapbox-gl-js/v2.22.0/mapbox-gl.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
+  <!-- PMTiles JS -->
+  <script src="https://unpkg.com/pmtiles@3.0.2/dist/pmtiles.js"></script>
 
   <style>
     body { margin:0; padding:0; }
@@ -29,8 +33,8 @@
 <div id="map"></div>
 
 <div id="sliderContainer">
-  <label for="densitySlider">Min Density: <span id="sliderValue">0.0051</span></label><br>
-  <input type="range" id="densitySlider" min="0.0051" max="8.8769" step="0.01" value="0.0051">
+  <label for="densitySlider">Min Scaled Value: <span id="sliderValue">0.005</span></label><br>
+  <input type="range" id="densitySlider" min="0.005" max="8.8769" step="0.01" value="0.005">
 </div>
 
 <script>
@@ -44,15 +48,21 @@ const map = new mapboxgl.Map({
 });
 
 map.on('load', async () => {
-  // PMTiles trips
+  // --- 1️⃣ Initialize PMTiles protocol ---
+  const protocol = new pmtiles.Protocol();
+  mapboxgl.addProtocol("pmtiles", protocol.tile);
+
+  // --- 2️⃣ Load trips.pmtiles as vector tiles ---
+  const pmtilesURL = "http://localhost:8080/sensor_data/trips.pmtiles";
+  const p = new pmtiles.PMTiles(pmtilesURL);
+
   map.addSource('trips', {
     type: 'vector',
-    url: 'http://localhost:8080/data/pmtiles.json'
+    url: `pmtiles://${pmtilesURL}`
   });
 
-  const response = await fetch('http://localhost:8080/data/pmtiles.json');
-  const tileJSON = await response.json();
-  const tripLayers = tileJSON.vector_layers.map(layer => layer.id);
+  const metadata = await p.getMetadata();
+  const tripLayers = metadata.vector_layers.map(layer => layer.id);
 
   tripLayers.forEach(layerId => {
     map.addLayer({
@@ -67,50 +77,53 @@ map.on('load', async () => {
     });
   });
 
-  // Amsterdam scaled GeoJSON
-  map.addSource('amsterdam', {
+  // --- 3️⃣ Add ambulance_calls.geojson (scaled values) ---
+  map.addSource('ambulance_calls', {
     type: 'geojson',
-    data: 'http://localhost:8080/amsterdam_grid_wgs84.geojson'
+    data: 'http://localhost:8080/sensor_data/ambulance_calls.geojson'
   });
 
-  // Green → Yellow → Red color scale for scaled_Total
+  // --- 4️⃣ Add scaled color-coded layer ---
   map.addLayer({
-    id: 'amsterdam-layer',
+    id: 'ambulance-layer',
     type: 'fill',
-    source: 'amsterdam',
+    source: 'ambulance_calls',
     paint: {
       'fill-color': [
         'interpolate',
         ['linear'],
-        ['get', 'scaled_Total'],
-        0.0051, '#2ECC71',
-        2.0, '#F1C40F',
-        5.0, '#E67E22',
-        8.8769, '#E74C3C'
+        ['get', 'Total_scaled'],
+        0.005, '#2ECC71',   // green (low)
+        2.0, '#F1C40F',     // yellow
+        5.0, '#E67E22',     // orange
+        8.8769, '#E74C3C'   // red (high)
       ],
       'fill-opacity': 0.7,
       'fill-outline-color': '#555'
     }
   });
 
-  // Zoom to Amsterdam grid bounds
-  map.getSource('amsterdam').once('data', (e) => {
+  // --- 5️⃣ Fit map to ambulance grid bounds ---
+  map.getSource('ambulance_calls').once('data', (e) => {
     if (e.sourceDataType === 'metadata') return;
-    const bbox = turf.bbox(map.getSource('amsterdam')._data);
+    const bbox = turf.bbox(map.getSource('ambulance_calls')._data);
     map.fitBounds(bbox, { padding: 20 });
   });
 
-  // Slider filter
+  // --- 6️⃣ Slider filter based on Total_scaled ---
   const slider = document.getElementById('densitySlider');
   const sliderValue = document.getElementById('sliderValue');
+
   slider.addEventListener('input', function(e) {
     const value = parseFloat(e.target.value);
     sliderValue.textContent = value.toFixed(2);
-    map.setFilter('amsterdam-layer', ['>=', ['get', 'scaled_Total'], value]);
+    map.setFilter('ambulance-layer', ['>=', ['get', 'Total_scaled'], value]);
   });
 
-  map.setFilter('amsterdam-layer', ['>=', ['get', 'scaled_Total'], 0.0051]);
+  // Default filter
+  map.setFilter('ambulance-layer', ['>=', ['get', 'Total_scaled'], 0.005]);
 });
 </script>
+
 </body>
 </html>
