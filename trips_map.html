@@ -16,54 +16,81 @@
       top: 10px;
       left: 10px;
       background: rgba(255,255,255,0.95);
-      padding: 12px;
+      padding: 15px;
       border-radius: 8px;
       font-family: sans-serif;
-      min-width: 220px;
+      min-width: 250px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     }
     #toolbox h3 {
-      margin: 0 0 10px 0;
-      font-size: 16px;
+      margin: 0 0 12px 0;
+      font-size: 17px;
       color: #333;
+      border-bottom: 2px solid #ddd;
+      padding-bottom: 8px;
     }
     .layer-control {
       margin-bottom: 15px;
       padding-bottom: 15px;
-      border-bottom: 1px solid #ddd;
+      border-bottom: 1px solid #eee;
     }
     .layer-control:last-child {
       border-bottom: none;
       margin-bottom: 0;
       padding-bottom: 0;
     }
-    .layer-control label {
+    .layer-control > label {
       display: flex;
       align-items: center;
       cursor: pointer;
       font-weight: 600;
-      color: #555;
+      color: #444;
+      font-size: 14px;
     }
     .layer-control input[type="checkbox"] {
       margin-right: 8px;
       cursor: pointer;
+      width: 16px;
+      height: 16px;
     }
     .slider-section {
-      margin-top: 10px;
-      padding-left: 24px;
+      margin-top: 12px;
+      padding: 10px;
+      background: rgba(0,0,0,0.03);
+      border-radius: 5px;
       display: none;
     }
     .slider-section.active {
       display: block;
     }
-    .slider-section label {
-      font-size: 13px;
+    .slider-info {
+      font-size: 12px;
       color: #666;
-      display: block;
-      margin-bottom: 5px;
+      margin-bottom: 8px;
+      font-weight: normal;
+    }
+    .slider-label {
+      font-size: 13px;
+      color: #444;
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+    .slider-value {
+      color: #E67E22;
+      font-weight: 700;
     }
     .slider-section input[type="range"] {
       width: 100%;
+      margin: 8px 0;
+    }
+    .slider-range {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #999;
+      margin-top: 4px;
     }
     #error {
       position: absolute;
@@ -84,7 +111,7 @@
 <div id="map"></div>
 
 <div id="toolbox">
-  <h3>Map Layers</h3>
+  <h3>🗺️ Map Layers</h3>
   
   <div class="layer-control">
     <label>
@@ -96,13 +123,19 @@
   <div class="layer-control">
     <label>
       <input type="checkbox" id="ambulanceCheckbox" checked>
-      Ambulance Calls
+      Ambulance Calls Heatmap
     </label>
     <div class="slider-section active" id="ambulanceSlider">
-      <label for="densitySlider">
-        Min Value: <span id="sliderValue">0.0</span>
-      </label>
-      <input type="range" id="densitySlider" min="0" max="1.0" step="0.01" value="0">
+      <div class="slider-info" id="dataInfo">Loading data...</div>
+      <div class="slider-label">
+        <span>Filter by threshold:</span>
+        <span class="slider-value" id="sliderValue">—</span>
+      </div>
+      <input type="range" id="densitySlider" min="0" max="1" step="0.01" value="0">
+      <div class="slider-range">
+        <span id="minLabel">0</span>
+        <span id="maxLabel">1</span>
+      </div>
     </div>
   </div>
 </div>
@@ -127,11 +160,10 @@ function showError(msg) {
 }
 
 map.on('load', async () => {
-  // Define propertyName at the top so it's available everywhere
-  let propertyName = 'Total';  // Default, will update after checking the data
+  let propertyName = 'Total';
   
   try {
-    // --- Load trips via tile server (like your working version) ---
+    // --- Load trips ---
     map.addSource('trips', {
       type: 'vector',
       url: 'http://localhost:8080/data/pmtiles.json'
@@ -154,9 +186,8 @@ map.on('load', async () => {
       });
     });
 
-    console.log('Trip layers loaded:', tripLayers);
+    console.log('✅ Trip layers loaded:', tripLayers);
     
-    // Toggle trips visibility
     const tripsCheckbox = document.getElementById('tripsCheckbox');
     tripsCheckbox.addEventListener('change', (e) => {
       const visibility = e.target.checked ? 'visible' : 'none';
@@ -172,15 +203,14 @@ map.on('load', async () => {
 
   try {
     // --- Load ambulance GeoJSON ---
-    // Change filename to match your actual file
     const geojsonResponse = await fetch('http://localhost:8000/sensor_data/ambulance_calls.geojson');
     const geojsonData = await geojsonResponse.json();
     
-    console.log('GeoJSON loaded');
-    console.log('Sample feature:', geojsonData.features[0]);
-    console.log('Available properties:', Object.keys(geojsonData.features[0].properties));
+    console.log('✅ GeoJSON loaded');
+    console.log('📊 Sample feature:', geojsonData.features[0]);
+    console.log('📋 Available properties:', Object.keys(geojsonData.features[0].properties));
 
-    // Check which property to use for color coding
+    // Detect which property to use
     const availableProps = geojsonData.features[0].properties;
     if ('rate_per_1000' in availableProps) {
       propertyName = 'rate_per_1000';
@@ -189,21 +219,24 @@ map.on('load', async () => {
     } else if ('Total' in availableProps) {
       propertyName = 'Total';
     }
-    console.log('Using property:', propertyName);
+    console.log('🎯 Using property:', propertyName);
     
-    // Get min/max values for this property to set slider range
+    // Calculate min/max for slider
     const values = geojsonData.features.map(f => f.properties[propertyName] || 0);
     const minVal = Math.min(...values);
     const maxVal = Math.max(...values);
-    console.log(`${propertyName} range: ${minVal.toFixed(4)} to ${maxVal.toFixed(4)}`);
+    console.log(`📈 ${propertyName} range: ${minVal.toFixed(4)} to ${maxVal.toFixed(4)}`);
 
     map.addSource('ambulance_calls', {
       type: 'geojson',
       data: geojsonData
     });
 
-    // --- Add color-coded layer based on RATE per 1000 residents ---
-    // Color scale will auto-adjust based on property
+    // Dynamic color scale based on property
+    const colorStops = propertyName === 'Total' 
+      ? [0, '#2ECC71', 0.3, '#F1C40F', 0.6, '#E67E22', 1.0, '#E74C3C']
+      : [0, '#2ECC71', 0.2, '#F1C40F', 0.5, '#E67E22', 1.0, '#E74C3C'];
+    
     map.addLayer({
       id: 'ambulance-layer',
       type: 'fill',
@@ -213,42 +246,74 @@ map.on('load', async () => {
           'interpolate',
           ['linear'],
           ['get', propertyName],
-          0, '#2ECC71',      // Green: low 
-          0.2, '#F1C40F',    // Yellow: medium
-          0.5, '#E67E22',    // Orange: high
-          1.0, '#E74C3C'     // Red: very high
+          ...colorStops
         ],
         'fill-opacity': 0.6,
         'fill-outline-color': '#333'
       }
     });
 
-    // --- Fit to bounds ---
     const bbox = turf.bbox(geojsonData);
     map.fitBounds(bbox, { padding: 20 });
 
-    // --- Slider filter ---
+    // --- CONFIGURE SLIDER WITH ACTUAL DATA ---
     const slider = document.getElementById('densitySlider');
     const sliderValue = document.getElementById('sliderValue');
+    const dataInfo = document.getElementById('dataInfo');
+    const minLabel = document.getElementById('minLabel');
+    const maxLabel = document.getElementById('maxLabel');
+    
+    // Set slider to actual data range
+    slider.min = minVal;
+    slider.max = maxVal;
+    slider.step = (maxVal - minVal) / 200; // 200 steps for smooth control
+    slider.value = minVal;
+    
+    // Create user-friendly labels
+    const labels = {
+      'rate_per_1000': {
+        info: '📊 Ambulance calls per 1,000 residents',
+        unit: ' calls/1k'
+      },
+      'Total_scaled': {
+        info: '📊 Scaled density value (0-1)',
+        unit: ''
+      },
+      'Total': {
+        info: '📊 Total ambulance calls in area',
+        unit: ' calls'
+      }
+    };
+    
+    const label = labels[propertyName] || { info: '📊 Density value', unit: '' };
+    dataInfo.textContent = label.info;
+    minLabel.textContent = minVal.toFixed(2) + label.unit;
+    maxLabel.textContent = maxVal.toFixed(2) + label.unit;
+    
+    // Update display value
+    function updateSliderDisplay(value) {
+      sliderValue.textContent = value.toFixed(3) + label.unit;
+    }
+    
+    updateSliderDisplay(minVal);
     
     slider.addEventListener('input', function(e) {
       const value = parseFloat(e.target.value);
-      sliderValue.textContent = value.toFixed(2);
+      updateSliderDisplay(value);
       map.setFilter('ambulance-layer', ['>=', ['get', propertyName], value]);
     });
 
-    map.setFilter('ambulance-layer', ['>=', ['get', propertyName], 0]);
+    map.setFilter('ambulance-layer', ['>=', ['get', propertyName], minVal]);
 
-    console.log('Ambulance layer loaded successfully');
+    console.log('✅ Ambulance layer loaded successfully');
 
-    // Toggle ambulance layer visibility
+    // Toggle visibility
     const ambulanceCheckbox = document.getElementById('ambulanceCheckbox');
     const ambulanceSlider = document.getElementById('ambulanceSlider');
     
     ambulanceCheckbox.addEventListener('change', (e) => {
       const isChecked = e.target.checked;
       map.setLayoutProperty('ambulance-layer', 'visibility', isChecked ? 'visible' : 'none');
-      // Show/hide slider when checkbox is toggled
       ambulanceSlider.classList.toggle('active', isChecked);
     });
 
