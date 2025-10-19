@@ -19,12 +19,12 @@
       background: rgba(255,255,255,0.95);
       padding: 15px;
       border-radius: 8px;
-      min-width: 280px;
+      min-width: 240px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     }
     
     h3 {
-      margin: 0 0 12px 0;
+      margin: 0 0 15px 0;
       font-size: 17px;
       color: #333;
       border-bottom: 2px solid #ddd;
@@ -32,31 +32,11 @@
     }
     
     .control-group {
-      margin-bottom: 15px;
-      padding-bottom: 15px;
-      border-bottom: 1px solid #eee;
+      margin-bottom: 12px;
     }
     
     .control-group:last-child {
-      border-bottom: none;
       margin-bottom: 0;
-      padding-bottom: 0;
-    }
-    
-    label {
-      display: block;
-      margin-bottom: 8px;
-      font-size: 13px;
-      font-weight: 600;
-      color: #444;
-    }
-    
-    select, input[type="range"] {
-      width: 100%;
-      padding: 6px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 13px;
     }
     
     .checkbox-label {
@@ -64,6 +44,8 @@
       align-items: center;
       font-weight: 600;
       cursor: pointer;
+      margin-bottom: 8px;
+      font-size: 14px;
     }
     
     input[type="checkbox"] {
@@ -73,40 +55,17 @@
       cursor: pointer;
     }
     
-    .slider-info {
-      display: flex;
-      justify-content: space-between;
-      font-size: 12px;
-      color: #666;
-      margin-top: 4px;
+    .nested-controls {
+      margin-left: 24px;
+      padding-left: 12px;
+      border-left: 2px solid #e0e0e0;
     }
     
-    .time-buttons {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 6px;
-      margin-top: 8px;
-    }
-    
-    .time-button {
-      padding: 8px;
-      background: #f0f0f0;
-      border: 2px solid #ddd;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
-      text-align: center;
-      transition: all 0.2s;
-    }
-    
-    .time-button:hover {
-      background: #e0e0e0;
-    }
-    
-    .time-button.active {
-      background: #3498db;
-      color: white;
-      border-color: #2980b9;
+    .nested-controls .checkbox-label {
+      font-weight: 500;
+      font-size: 13px;
+      margin-bottom: 6px;
+      color: #555;
     }
     
     #stats {
@@ -141,7 +100,7 @@
 <div id="map"></div>
 
 <div id="controls">
-  <h3>🚑 Ambulance Calls</h3>
+  <h3>Map Layers</h3>
   
   <div class="control-group">
     <label class="checkbox-label">
@@ -152,55 +111,26 @@
   
   <div class="control-group">
     <label class="checkbox-label">
-      <input type="checkbox" id="heatmapCheckbox" checked>
-      Heatmap
+      <input type="checkbox" id="ambulanceCheckbox" checked>
+      🚑 Ambulance Calls
     </label>
-  </div>
-  
-  <div class="control-group">
-    <label class="checkbox-label">
-      <input type="checkbox" id="pointsCheckbox">
-      Individual Points
-    </label>
-  </div>
-  
-  <div class="control-group">
-    <label>Time Filter:</label>
-    <select id="timeFilter">
-      <option value="all">All Times</option>
-      <option value="night">🌙 Night (11pm-5am)</option>
-      <option value="morning">🌅 Morning (5am-11am)</option>
-      <option value="afternoon">☀️ Afternoon (11am-5pm)</option>
-      <option value="evening">🌆 Evening (5pm-11pm)</option>
-    </select>
-  </div>
-  
-  <div class="control-group">
-    <label>Heatmap Intensity:</label>
-    <input type="range" id="intensitySlider" min="0" max="1" step="0.1" value="0.5">
-    <div class="slider-info">
-      <span>Low</span>
-      <span>High</span>
-    </div>
-  </div>
-  
-  <div class="control-group">
-    <label>Heatmap Radius:</label>
-    <input type="range" id="radiusSlider" min="5" max="50" step="5" value="20">
-    <div class="slider-info">
-      <span>5px</span>
-      <span id="radiusValue">20px</span>
-      <span>50px</span>
+    
+    <div class="nested-controls">
+      <label class="checkbox-label">
+        <input type="checkbox" id="heatmapCheckbox" checked>
+        Heatmap
+      </label>
+      
+      <label class="checkbox-label">
+        <input type="checkbox" id="pointsCheckbox">
+        Individual Points
+      </label>
     </div>
   </div>
 </div>
 
 <div id="stats">
   <h4>Statistics</h4>
-  <div class="stat-row">
-    <span class="stat-label">Showing:</span>
-    <span class="stat-value" id="statShowing">—</span>
-  </div>
   <div class="stat-row">
     <span class="stat-label">Total calls:</span>
     <span class="stat-value" id="statTotal">—</span>
@@ -267,54 +197,44 @@ map.on('load', async () => {
       data: ambulanceData
     });
 
-    // Heatmap layer
+    // Heatmap layer - cleaner color scheme like the example
     map.addLayer({
       id: 'ambulance-heatmap',
       type: 'heatmap',
       source: 'ambulance-points',
       paint: {
-        // Increase weight as diameter increases
-        'heatmap-weight': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          0, 0,
-          15, 1
-        ],
-        // Increase intensity as zoom level increases
+        'heatmap-weight': 1,
         'heatmap-intensity': [
           'interpolate',
           ['linear'],
           ['zoom'],
-          0, 0.5,
-          15, 1
+          0, 1,
+          15, 1.5
         ],
-        // Color ramp for heatmap
         'heatmap-color': [
           'interpolate',
           ['linear'],
           ['heatmap-density'],
-          0, 'rgba(33,102,172,0)',
-          0.2, 'rgb(103,169,207)',
-          0.4, 'rgb(209,229,240)',
-          0.6, 'rgb(253,219,199)',
-          0.8, 'rgb(239,138,98)',
-          1, 'rgb(178,24,43)'
+          0, 'rgba(0, 0, 255, 0)',
+          0.1, 'rgba(65, 105, 225, 0.6)',
+          0.3, 'rgba(0, 255, 255, 0.7)',
+          0.5, 'rgba(0, 255, 0, 0.8)',
+          0.7, 'rgba(255, 255, 0, 0.9)',
+          1, 'rgba(255, 0, 0, 1)'
         ],
-        // Radius of influence of one point in pixels
-        'heatmap-radius': 20,
-        // Transition from heatmap to circle layer at zoom level 14
-        'heatmap-opacity': [
+        'heatmap-radius': [
           'interpolate',
           ['linear'],
           ['zoom'],
-          7, 1,
-          14, 0.5
-        ]
+          0, 2,
+          9, 20,
+          15, 40
+        ],
+        'heatmap-opacity': 0.8
       }
     });
 
-    // Circle layer for individual points
+    // Circle layer for individual points - cleaner design
     map.addLayer({
       id: 'ambulance-points-layer',
       type: 'circle',
@@ -324,13 +244,14 @@ map.on('load', async () => {
           'interpolate',
           ['linear'],
           ['zoom'],
-          7, 1,
-          14, 4
+          7, 2,
+          14, 6
         ],
-        'circle-color': '#E74C3C',
+        'circle-color': '#ff4444',
         'circle-opacity': 0,
-        'circle-stroke-width': 1,
-        'circle-stroke-color': '#fff'
+        'circle-stroke-width': 2,
+        'circle-stroke-color': '#ffffff',
+        'circle-stroke-opacity': 0
       }
     });
 
@@ -350,6 +271,19 @@ map.on('load', async () => {
 });
 
 function setupControls() {
+  // Main ambulance toggle
+  document.getElementById('ambulanceCheckbox').addEventListener('change', (e) => {
+    const visibility = e.target.checked ? 'visible' : 'none';
+    map.setLayoutProperty('ambulance-heatmap', 'visibility', visibility);
+    
+    // Also handle points if they're enabled
+    const pointsChecked = document.getElementById('pointsCheckbox').checked;
+    if (pointsChecked) {
+      map.setPaintProperty('ambulance-points-layer', 'circle-opacity', e.target.checked ? 0.7 : 0);
+      map.setPaintProperty('ambulance-points-layer', 'circle-stroke-opacity', e.target.checked ? 0.9 : 0);
+    }
+  });
+
   // Heatmap toggle
   document.getElementById('heatmapCheckbox').addEventListener('change', (e) => {
     map.setLayoutProperty('ambulance-heatmap', 'visibility', 
@@ -358,53 +292,16 @@ function setupControls() {
 
   // Points toggle
   document.getElementById('pointsCheckbox').addEventListener('change', (e) => {
+    const ambulanceEnabled = document.getElementById('ambulanceCheckbox').checked;
     map.setPaintProperty('ambulance-points-layer', 'circle-opacity', 
-      e.target.checked ? 0.8 : 0);
-  });
-
-  // Time filter
-  document.getElementById('timeFilter').addEventListener('change', (e) => {
-    const period = e.target.value;
-    
-    if (period === 'all') {
-      map.setFilter('ambulance-heatmap', null);
-      map.setFilter('ambulance-points-layer', null);
-    } else {
-      const filter = ['==', ['get', 'period'], period];
-      map.setFilter('ambulance-heatmap', filter);
-      map.setFilter('ambulance-points-layer', filter);
-    }
-    
-    updateStats();
-  });
-
-  // Intensity slider
-  document.getElementById('intensitySlider').addEventListener('input', (e) => {
-    const value = parseFloat(e.target.value);
-    map.setPaintProperty('ambulance-heatmap', 'heatmap-intensity', value);
-  });
-
-  // Radius slider
-  document.getElementById('radiusSlider').addEventListener('input', (e) => {
-    const value = parseInt(e.target.value);
-    document.getElementById('radiusValue').textContent = value + 'px';
-    map.setPaintProperty('ambulance-heatmap', 'heatmap-radius', value);
+      e.target.checked && ambulanceEnabled ? 0.7 : 0);
+    map.setPaintProperty('ambulance-points-layer', 'circle-stroke-opacity', 
+      e.target.checked && ambulanceEnabled ? 0.9 : 0);
   });
 }
 
 function updateStats() {
   if (!ambulanceData) return;
-  
-  const timeFilter = document.getElementById('timeFilter').value;
-  
-  let filteredCount = ambulanceData.features.length;
-  if (timeFilter !== 'all') {
-    filteredCount = ambulanceData.features.filter(
-      f => f.properties.period === timeFilter
-    ).length;
-  }
-  
-  document.getElementById('statShowing').textContent = filteredCount;
   document.getElementById('statTotal').textContent = ambulanceData.features.length;
 }
 
@@ -416,9 +313,9 @@ map.on('click', 'ambulance-points-layer', (e) => {
     .setLngLat(e.lngLat)
     .setHTML(`
       <strong>Ambulance Call</strong><br>
-      📍 ${props.location}<br>
-      🕐 ${props.time}<br>
-      📅 ${props.date}<br>
+      📍 ${props.location || 'Unknown location'}<br>
+      🕐 ${props.time || 'Unknown time'}<br>
+      📅 ${props.date || 'Unknown date'}<br>
       ${props.message ? `💬 ${props.message}` : ''}
     `)
     .addTo(map);
