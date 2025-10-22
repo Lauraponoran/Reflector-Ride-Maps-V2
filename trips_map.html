@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Amsterdam Ambulance Calls - Grid View</title>
+  <title>Cycle Path Visualization</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
   <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
@@ -58,6 +58,21 @@
       cursor: pointer;
       margin-bottom: 8px;
       font-size: 14px;
+    }
+    
+    .sub-controls {
+      margin-left: 24px;
+      padding-left: 12px;
+      border-left: 2px solid #ddd;
+      display: none;
+    }
+    
+    .sub-controls.visible {
+      display: block;
+    }
+    
+    .sub-controls .control-group {
+      margin-bottom: 12px;
     }
     
     input[type="checkbox"] {
@@ -163,14 +178,14 @@
   <div class="control-group">
     <label class="checkbox-label">
       <input type="checkbox" id="tripsCheckbox" checked>
-      🚴 Bike Routes
+      Bike Routes
     </label>
   </div>
   
   <div class="control-group">
     <label class="checkbox-label">
       <input type="checkbox" id="ambulanceCheckbox" checked>
-      🚑 Ambulance Grid
+      Ambulance Grid
     </label>
   </div>
   
@@ -193,6 +208,13 @@
       <span id="minCallsValue">0 calls</span>
       <span>10</span>
     </div>
+  </div>
+  
+  <div class="control-group">
+    <label class="checkbox-label">
+      <input type="checkbox" id="trafficLightsCheckbox" checked>
+      Traffic Lights
+    </label>
   </div>
 </div>
 
@@ -274,7 +296,7 @@ map.on('load', async () => {
 
   // Load ambulance grid data
   try {
-    const response = await fetch('http://localhost:8000/sensor_data/amsterdam_ambulance_grid.geojson');
+    const response = await fetch('http://localhost:8000/3_party_data/amsterdam_ambulance_grid.geojson');
     gridData = await response.json();
     
     console.log('✅ Loaded', gridData.features.length, 'grid cells');
@@ -337,9 +359,42 @@ map.on('load', async () => {
   } catch (err) {
     console.error('Error loading grid data:', err);
   }
+
+  // Load traffic lights (add on top of all layers)
+  try {
+    map.addSource('verkeerslichten', {
+      type: 'geojson',
+      data: 'https://maps.amsterdam.nl/open_geodata/geojson_lnglat.php?KAARTLAAG=VERKEERSLICHTEN&THEMA=verkeerslichten'
+    });
+
+    // Add layer on top of everything
+    map.addLayer({
+      id: 'verkeerslichten',
+      type: 'circle',
+      source: 'verkeerslichten',
+      paint: {
+        'circle-radius': 2.2,
+        'circle-color': '#ff1200',
+        'circle-opacity': 0.9,
+        'circle-stroke-width': 1,
+        'circle-stroke-color': '#fff',
+        'circle-stroke-opacity': 0.7
+      }
+    });
+
+    console.log('✅ Traffic lights loaded');
+  } catch (err) {
+    console.warn('Traffic lights not available:', err);
+  }
 });
 
 function setupControls() {
+  // Traffic lights toggle
+  document.getElementById('trafficLightsCheckbox').addEventListener('change', (e) => {
+    const visibility = e.target.checked ? 'visible' : 'none';
+    map.setLayoutProperty('verkeerslichten', 'visibility', visibility);
+  });
+
   // Ambulance toggle
   document.getElementById('ambulanceCheckbox').addEventListener('change', (e) => {
     const visibility = e.target.checked ? 'visible' : 'none';
@@ -416,12 +471,29 @@ map.on('click', 'ambulance-grid-fill', (e) => {
     .addTo(map);
 });
 
+// Click on traffic light to show info
+map.on('click', 'verkeerslichten', (e) => {
+  const props = e.features[0].properties;
+  new mapboxgl.Popup()
+    .setLngLat(e.lngLat)
+    .setHTML(`<strong>🚦 Verkeerslicht</strong><br>${props.adres || 'Geen adres beschikbaar'}`)
+    .addTo(map);
+});
+
 // Change cursor on hover
 map.on('mouseenter', 'ambulance-grid-fill', () => {
   map.getCanvas().style.cursor = 'pointer';
 });
 
 map.on('mouseleave', 'ambulance-grid-fill', () => {
+  map.getCanvas().style.cursor = '';
+});
+
+map.on('mouseenter', 'verkeerslichten', () => {
+  map.getCanvas().style.cursor = 'pointer';
+});
+
+map.on('mouseleave', 'verkeerslichten', () => {
   map.getCanvas().style.cursor = '';
 });
 </script>
