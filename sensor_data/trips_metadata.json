@@ -6847,5 +6847,25 @@
       "SENSOR": ",09:16,00:46,2.19,14.2,15.5,22.0,-1.48,2.97,--,0",
       "GNSS": ",09:19,00:27,2.328,15,16,23,,,,,3"
     }
+  },
+  "604E9_Trip39": {
+    "source_file": "604E9_20_10_2025_11_42_36.csv",
+    "metadata": {
+      ",,2,,,,,,,,,,,13": "38:31,257",
+      "Charge(start | stop)": ", 76 | 75%",
+      "WheelDiam": ", 26.0 inch",
+      "Frequency": ", 50.0 Hz",
+      "Trip stop code": ", 3 (BLE sensor disconnected so trip stopped by timeout)",
+      "BLE Device Information Service": "BLE Device Information Service",
+      "Hardware": ", 304",
+      "Firmware": ",9.1.0",
+      "SystemID": ", DC8E95FFFE7604E9",
+      "App version": ", 1.1.2+20",
+      "Sensor's connection": ", 2025-10-20 11:42:32.244, 2025-10-20 11:59:23.593",
+      "Trip start/end": ", 2025-10-20 11:42:36.672, 2025-10-20 12:00:23.611",
+      ",Duration,Stops,Dist km,AVG km/h,AVGWOS km/h,MAX km/h,MAX- m/s\u00b2,MAX+ m/s\u00b2,Falls,Bamps,Elevation m": ",Duration,Stops,Dist km,AVG km/h,AVGWOS km/h,MAX km/h,MAX- m/s\u00b2,MAX+ m/s\u00b2,Falls,Bamps,Elevation m",
+      "SENSOR": ",16:36,01:44,4.33,15.7,17.5,26.7,-1.83,6.27,--,1",
+      "GNSS": ",17:46,05:38,4.424,15,22,41,,,,,0"
+    }
   }
 }
