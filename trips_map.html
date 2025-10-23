@@ -20,6 +20,8 @@
       padding: 15px;
       border-radius: 8px;
       min-width: 260px;
+      max-height: 90vh;
+      overflow-y: auto;
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     }
     
@@ -64,11 +66,7 @@
       margin-left: 24px;
       padding-left: 12px;
       border-left: 2px solid #ddd;
-      display: none;
-    }
-    
-    .sub-controls.visible {
-      display: block;
+      margin-top: 8px;
     }
     
     .sub-controls .control-group {
@@ -93,6 +91,26 @@
       font-size: 12px;
       color: #666;
       margin-top: 4px;
+    }
+    
+    .radio-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    
+    .radio-label {
+      display: flex;
+      align-items: center;
+      font-size: 13px;
+      font-weight: normal;
+      cursor: pointer;
+    }
+    
+    input[type="radio"] {
+      margin-right: 8px;
+      cursor: pointer;
     }
     
     .legend {
@@ -141,6 +159,20 @@
       display: flex;
     }
     
+    .speed-legend-item {
+      display: flex;
+      align-items: center;
+      margin: 5px 0;
+      font-size: 12px;
+    }
+    
+    .speed-color-box {
+      width: 30px;
+      height: 4px;
+      margin-right: 8px;
+      border-radius: 2px;
+    }
+    
     #stats {
       position: absolute;
       bottom: 10px;
@@ -180,6 +212,22 @@
       <input type="checkbox" id="tripsCheckbox" checked>
       Bike Routes
     </label>
+    <div class="sub-controls">
+      <label class="checkbox-label">
+        <input type="checkbox" id="speedSegmentsCheckbox">
+        Show Speed Colors
+      </label>
+      <div class="radio-group">
+        <label class="radio-label">
+          <input type="radio" name="speedMode" value="gradient" checked>
+          Smooth Gradient
+        </label>
+        <label class="radio-label">
+          <input type="radio" name="speedMode" value="categories">
+          Speed Categories
+        </label>
+      </div>
+    </div>
   </div>
   
   <div class="control-group">
@@ -230,7 +278,7 @@
   </div>
 </div>
 
-<div class="legend">
+<div class="legend" id="mainLegend">
   <h4>Call Intensity</h4>
   <div class="legend-content">
     <div class="legend-scale"></div>
@@ -240,6 +288,38 @@
       <div></div>
       <div>Low</div>
     </div>
+  </div>
+</div>
+
+<div class="legend" id="speedLegend" style="display: none;">
+  <h4>Speed (km/h)</h4>
+  <div class="speed-legend-item">
+    <div class="speed-color-box" style="background: #808080;"></div>
+    <span>Stopped (0)</span>
+  </div>
+  <div class="speed-legend-item">
+    <div class="speed-color-box" style="background: #4CAF50;"></div>
+    <span>Very Slow (0-5)</span>
+  </div>
+  <div class="speed-legend-item">
+    <div class="speed-color-box" style="background: #8BC34A;"></div>
+    <span>Slow (5-10)</span>
+  </div>
+  <div class="speed-legend-item">
+    <div class="speed-color-box" style="background: #FFEB3B;"></div>
+    <span>Moderate (10-15)</span>
+  </div>
+  <div class="speed-legend-item">
+    <div class="speed-color-box" style="background: #FF9800;"></div>
+    <span>Fast (15-20)</span>
+  </div>
+  <div class="speed-legend-item">
+    <div class="speed-color-box" style="background: #FF5722;"></div>
+    <span>Very Fast (20-25)</span>
+  </div>
+  <div class="speed-legend-item">
+    <div class="speed-color-box" style="background: #F44336;"></div>
+    <span>Extreme (25+)</span>
   </div>
 </div>
 
@@ -257,10 +337,54 @@ let gridData = null;
 let maxCalls = 0;
 let currentTimeFilter = 'all';
 let currentMinCalls = 0;
+let tripLayers = [];
+let speedMode = 'gradient';
+
+// Speed color functions
+function getSpeedColorCategory(speed) {
+  if (speed === 0) return '#808080';
+  if (speed < 5) return '#4CAF50';
+  if (speed < 10) return '#8BC34A';
+  if (speed < 15) return '#FFEB3B';
+  if (speed < 20) return '#FF9800';
+  if (speed < 25) return '#FF5722';
+  return '#F44336';
+}
+
+function getSpeedColorExpression(mode) {
+  if (mode === 'gradient') {
+    // Smooth gradient based on Speed property from vector tiles
+    return [
+      'interpolate',
+      ['linear'],
+      ['coalesce', ['get', 'Speed'], 0],
+      -2, '#808080',  // Stopped/negative values
+      0, '#4CAF50',   // 0 km/h - green
+      5, '#8BC34A',   // 5 km/h - light green
+      10, '#FFEB3B',  // 10 km/h - yellow
+      15, '#FF9800',  // 15 km/h - orange
+      20, '#FF5722',  // 20 km/h - deep orange
+      25, '#F44336'   // 25+ km/h - red
+    ];
+  } else {
+    // Step-based categories
+    return [
+      'step',
+      ['coalesce', ['get', 'Speed'], 0],
+      '#808080',  // Default for 0 or negative
+      0, '#4CAF50',   // 0-5 km/h
+      5, '#8BC34A',   // 5-10 km/h
+      10, '#FFEB3B',  // 10-15 km/h
+      15, '#FF9800',  // 15-20 km/h
+      20, '#FF5722',  // 20-25 km/h
+      25, '#F44336'   // 25+ km/h
+    ];
+  }
+}
 
 map.on('load', async () => {
   
-  // Load trips
+  // Load trips from PMTiles
   try {
     map.addSource('trips', {
       type: 'vector',
@@ -269,8 +393,9 @@ map.on('load', async () => {
 
     const response = await fetch('http://localhost:8080/data/pmtiles.json');
     const tileJSON = await response.json();
-    const tripLayers = tileJSON.vector_layers.map(layer => layer.id);
+    tripLayers = tileJSON.vector_layers.map(layer => layer.id);
 
+    // Add all trip layers with default orange color
     tripLayers.forEach(layerId => {
       map.addLayer({
         id: layerId,
@@ -279,17 +404,15 @@ map.on('load', async () => {
         'source-layer': layerId,
         paint: {
           'line-color': '#FF6600',
-          'line-width': 1
+          'line-width': 2,
+          'line-opacity': 0.8
         }
       });
     });
 
-    document.getElementById('tripsCheckbox').addEventListener('change', (e) => {
-      const visibility = e.target.checked ? 'visible' : 'none';
-      tripLayers.forEach(layerId => {
-        map.setLayoutProperty(layerId, 'visibility', visibility);
-      });
-    });
+    console.log('✅ Loaded', tripLayers.length, 'trip layers');
+    setupTripControls();
+
   } catch (err) {
     console.warn('Trips not available:', err);
   }
@@ -301,7 +424,6 @@ map.on('load', async () => {
     
     console.log('✅ Loaded', gridData.features.length, 'grid cells');
     
-    // Calculate max calls for normalization
     maxCalls = Math.max(...gridData.features.map(f => f.properties.total_calls));
     console.log('📊 Max calls in a cell:', maxCalls);
     
@@ -310,7 +432,6 @@ map.on('load', async () => {
       data: gridData
     });
 
-    // Grid fill layer with more gradual color scale
     map.addLayer({
       id: 'ambulance-grid-fill',
       type: 'fill',
@@ -334,7 +455,6 @@ map.on('load', async () => {
       }
     });
 
-    // Grid outline layer
     map.addLayer({
       id: 'ambulance-grid-outline',
       type: 'line',
@@ -346,11 +466,9 @@ map.on('load', async () => {
       }
     });
 
-    // Fit map to data
     const bbox = turf.bbox(gridData);
     map.fitBounds(bbox, { padding: 50 });
 
-    // Setup controls
     setupControls();
     updateStats();
 
@@ -360,14 +478,13 @@ map.on('load', async () => {
     console.error('Error loading grid data:', err);
   }
 
-  // Load traffic lights (add on top of all layers)
+  // Load traffic lights
   try {
     map.addSource('verkeerslichten', {
       type: 'geojson',
       data: 'https://maps.amsterdam.nl/open_geodata/geojson_lnglat.php?KAARTLAAG=VERKEERSLICHTEN&THEMA=verkeerslichten'
     });
 
-    // Add layer on top of everything
     map.addLayer({
       id: 'verkeerslichten',
       type: 'circle',
@@ -387,6 +504,79 @@ map.on('load', async () => {
     console.warn('Traffic lights not available:', err);
   }
 });
+
+function setupTripControls() {
+  // Main trips toggle
+  document.getElementById('tripsCheckbox').addEventListener('change', (e) => {
+    const visibility = e.target.checked ? 'visible' : 'none';
+    tripLayers.forEach(layerId => {
+      map.setLayoutProperty(layerId, 'visibility', visibility);
+    });
+  });
+
+  // Speed segments toggle
+  document.getElementById('speedSegmentsCheckbox').addEventListener('change', (e) => {
+    const speedLegend = document.getElementById('speedLegend');
+    const mainLegend = document.getElementById('mainLegend');
+    
+    if (e.target.checked) {
+      // Switch to speed colors
+      tripLayers.forEach(layerId => {
+        map.setPaintProperty(layerId, 'line-color', getSpeedColorExpression(speedMode));
+        map.setPaintProperty(layerId, 'line-width', 3);
+      });
+      speedLegend.style.display = 'block';
+      mainLegend.style.display = 'none';
+    } else {
+      // Switch back to default orange
+      tripLayers.forEach(layerId => {
+        map.setPaintProperty(layerId, 'line-color', '#FF6600');
+        map.setPaintProperty(layerId, 'line-width', 2);
+      });
+      speedLegend.style.display = 'none';
+      mainLegend.style.display = 'block';
+    }
+  });
+
+  // Speed mode radio buttons
+  document.querySelectorAll('input[name="speedMode"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      speedMode = e.target.value;
+      if (document.getElementById('speedSegmentsCheckbox').checked) {
+        tripLayers.forEach(layerId => {
+          map.setPaintProperty(layerId, 'line-color', getSpeedColorExpression(speedMode));
+        });
+      }
+    });
+  });
+
+  // Add click handler for trip layers to show speed info
+  tripLayers.forEach(layerId => {
+    map.on('click', layerId, (e) => {
+      const props = e.features[0].properties;
+      const speed = props.Speed || 0;
+      
+      new mapboxgl.Popup()
+        .setLngLat(e.lngLat)
+        .setHTML(`
+          <strong>Trip Info</strong><br>
+          🚴 Speed: ${speed} km/h<br>
+          📍 Marker: ${props.marker || 'N/A'}<br>
+          📊 Samples: ${props.Samples || 'N/A'}<br>
+          ⏱️ Time: ${props['HH:mm:ss'] || 'N/A'}
+        `)
+        .addTo(map);
+    });
+
+    map.on('mouseenter', layerId, () => {
+      map.getCanvas().style.cursor = 'pointer';
+    });
+
+    map.on('mouseleave', layerId, () => {
+      map.getCanvas().style.cursor = '';
+    });
+  });
+}
 
 function setupControls() {
   // Traffic lights toggle
@@ -422,7 +612,6 @@ function updateGridFilter() {
   const propertyKey = currentTimeFilter === 'all' ? 'total_calls' : 
                       currentTimeFilter + '_calls';
   
-  // Filter cells based on minimum calls threshold
   const filter = ['>=', ['get', propertyKey], currentMinCalls];
   
   map.setFilter('ambulance-grid-fill', filter);
@@ -435,7 +624,6 @@ function updateStats() {
   const propertyKey = currentTimeFilter === 'all' ? 'total_calls' : 
                       currentTimeFilter + '_calls';
   
-  // Count calls in visible cells only
   const visibleCalls = gridData.features
     .filter(f => f.properties[propertyKey] >= currentMinCalls)
     .reduce((sum, f) => sum + f.properties[propertyKey], 0);
@@ -448,12 +636,9 @@ function updateStats() {
   document.getElementById('statTotal').textContent = totalCalls.toFixed(0);
 }
 
-// Click on grid to show info
+// Click handlers
 map.on('click', 'ambulance-grid-fill', (e) => {
   const props = e.features[0].properties;
-  
-  const propertyKey = currentTimeFilter === 'all' ? 'total_calls' : 
-                      currentTimeFilter + '_calls';
   
   new mapboxgl.Popup()
     .setLngLat(e.lngLat)
@@ -471,7 +656,6 @@ map.on('click', 'ambulance-grid-fill', (e) => {
     .addTo(map);
 });
 
-// Click on traffic light to show info
 map.on('click', 'verkeerslichten', (e) => {
   const props = e.features[0].properties;
   new mapboxgl.Popup()
@@ -480,7 +664,7 @@ map.on('click', 'verkeerslichten', (e) => {
     .addTo(map);
 });
 
-// Change cursor on hover
+// Cursor handlers
 map.on('mouseenter', 'ambulance-grid-fill', () => {
   map.getCanvas().style.cursor = 'pointer';
 });

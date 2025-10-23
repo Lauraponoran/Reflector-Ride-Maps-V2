@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Bike Trip Speed Segments</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js'></script>
+    <link href='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css' rel='stylesheet' />
+    <style>
+        body { margin: 0; padding: 0; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        
+        .legend {
+            position: absolute;
+            bottom: 30px;
+            right: 10px;
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            z-index: 1;
+        }
+        
+        .legend h4 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+        }
+        
+        .legend-color {
+            width: 30px;
+            height: 4px;
+            margin-right: 10px;
+            border-radius: 2px;
+        }
+        
+        .info-panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            max-width: 250px;
+            z-index: 1;
+        }
+        
+        .file-input {
+            margin-bottom: 10px;
+        }
+        
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        button:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <div class="info-panel">
+        <h3 style="margin-top:0">Load Bike Trip Data</h3>
+        <input type="file" class="file-input" id="geojsonFile" accept=".geojson,.json">
+        <div id="stats" style="margin-top:10px; display:none;">
+            <strong>Trip Statistics:</strong>
+            <div>Distance: <span id="totalDistance">0</span> km</div>
+            <div>Avg Speed: <span id="avgSpeed">0</span> km/h</div>
+            <div>Max Speed: <span id="maxSpeed">0</span> km/h</div>
+        </div>
+    </div>
+    
+    <div class="legend">
+        <h4>Speed (km/h)</h4>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #808080;"></div>
+            <span>Stopped (0)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #4CAF50;"></div>
+            <span>Very Slow (0-5)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #8BC34A;"></div>
+            <span>Slow (5-10)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #FFEB3B;"></div>
+            <span>Moderate (10-15)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #FF9800;"></div>
+            <span>Fast (15-20)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #FF5722;"></div>
+            <span>Very Fast (20-25)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #F44336;"></div>
+            <span>Extreme (25+)</span>
+        </div>
+    </div>
+
+    <script>
+        // Replace with your Mapbox access token
+        mapboxgl.accessToken = 'pk.eyJ1IjoiZGFud2Fuc2NoaXR6IiwiYSI6ImNtaDBsYWwxZjE0Y2wybHBvNm5iOGlwZmQifQ.oztvgJRZSC0Oi3NqrZ1Qlg';
+        
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/streets-v11',
+            center: [4.9091, 52.3485], // Amsterdam area
+            zoom: 15
+        });
+
+        function getSpeedColor(speed) {
+            if (speed === 0) return '#808080';
+            if (speed < 5) return '#4CAF50';
+            if (speed < 10) return '#8BC34A';
+            if (speed < 15) return '#FFEB3B';
+            if (speed < 20) return '#FF9800';
+            if (speed < 25) return '#FF5722';
+            return '#F44336';
+        }
+
+        function parseTimestamp(time, ms) {
+            if (!time) return 0;
+            const [hours, minutes, seconds] = time.split(':').map(Number);
+            const milliseconds = ms ? parseInt(ms) : 0;
+            return hours * 3600 + minutes * 60 + seconds + milliseconds / 1000;
+        }
+
+        function processSpeedSegments(geojson) {
+            const features = geojson.features;
+            const speedSegments = [];
+            
+            let lastKnownSpeed = 0;
+            let lastTimestamp = 0;
+            let totalDistance = 0;
+            let speedSum = 0;
+            let speedCount = 0;
+            let maxSpeed = 0;
+            
+            for (let i = 0; i < features.length; i++) {
+                const feature = features[i];
+                const props = feature.properties;
+                const coords = feature.geometry.coordinates;
+                
+                if (coords.length < 2) continue;
+                
+                let currentSpeed = 0;
+                
+                if (props['HH:mm:ss']) {
+                    const currentTimestamp = parseTimestamp(props['HH:mm:ss'], props['SSS']);
+                    
+                    // Use Speed GPS if available (convert m/s to km/h)
+                    if (props['Speed GPS'] && parseFloat(props['Speed GPS']) > 0) {
+                        currentSpeed = parseFloat(props['Speed GPS']) * 3.6;
+                    }
+                    
+                    lastTimestamp = currentTimestamp;
+                    lastKnownSpeed = currentSpeed;
+                    
+                    if (currentSpeed > maxSpeed) maxSpeed = currentSpeed;
+                    speedSum += currentSpeed;
+                    speedCount++;
+                } else {
+                    // Extrapolated point - use last known speed
+                    currentSpeed = lastKnownSpeed;
+                }
+                
+                // Calculate segment distance
+                const [lon1, lat1] = coords[0];
+                const [lon2, lat2] = coords[1];
+                const segmentDist = haversineDistance(lat1, lon1, lat2, lon2);
+                totalDistance += segmentDist;
+                
+                const segment = {
+                    type: 'Feature',
+                    geometry: {
+                        type: 'LineString',
+                        coordinates: coords
+                    },
+                    properties: {
+                        ...props,
+                        speed_kmh: parseFloat(currentSpeed.toFixed(2)),
+                        speed_color: getSpeedColor(currentSpeed),
+                        is_extrapolated: !props['HH:mm:ss']
+                    }
+                };
+                
+                speedSegments.push(segment);
+            }
+            
+            // Update stats
+            document.getElementById('totalDistance').textContent = (totalDistance / 1000).toFixed(2);
+            document.getElementById('avgSpeed').textContent = speedCount > 0 ? (speedSum / speedCount).toFixed(1) : '0';
+            document.getElementById('maxSpeed').textContent = maxSpeed.toFixed(1);
+            document.getElementById('stats').style.display = 'block';
+            
+            return {
+                type: 'FeatureCollection',
+                features: speedSegments
+            };
+        }
+
+        function haversineDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371000; // Earth's radius in meters
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                     Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        map.on('load', () => {
+            document.getElementById('geojsonFile').addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const geojson = JSON.parse(event.target.result);
+                        const processed = processSpeedSegments(geojson);
+                        
+                        // Remove existing source and layer if present
+                        if (map.getSource('bike-trips')) {
+                            map.removeLayer('speed-segments');
+                            map.removeSource('bike-trips');
+                        }
+                        
+                        // Add new source and layer
+                        map.addSource('bike-trips', {
+                            type: 'geojson',
+                            data: processed
+                        });
+                        
+                        map.addLayer({
+                            id: 'speed-segments',
+                            type: 'line',
+                            source: 'bike-trips',
+                            paint: {
+                                'line-color': ['get', 'speed_color'],
+                                'line-width': 4,
+                                'line-opacity': 0.8
+                            }
+                        });
+                        
+                        // Fit map to data bounds
+                        const bounds = new mapboxgl.LngLatBounds();
+                        processed.features.forEach(feature => {
+                            feature.geometry.coordinates.forEach(coord => {
+                                bounds.extend(coord);
+                            });
+                        });
+                        map.fitBounds(bounds, { padding: 50 });
+                        
+                    } catch (error) {
+                        alert('Error loading GeoJSON: ' + error.message);
+                    }
+                };
+                reader.readAsText(file);
+            });
+            
+            // Add click handler to show speed info
+            map.on('click', 'speed-segments', (e) => {
+                const props = e.features[0].properties;
+                new mapboxgl.Popup()
+                    .setLngLat(e.lngLat)
+                    .setHTML(`
+                        <strong>Speed:</strong> ${props.speed_kmh} km/h<br>
+                        <strong>Marker:</strong> ${props.marker}<br>
+                        ${props.is_extrapolated === 'true' ? '<em>(Extrapolated)</em>' : '<em>(GPS Point)</em>'}
+                    `)
+                    .addTo(map);
+            });
+            
+            map.on('mouseenter', 'speed-segments', () => {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+            
+            map.on('mouseleave', 'speed-segments', () => {
+                map.getCanvas().style.cursor = '';
+            });
+        });
+    </script>
+</body>
+</html>
