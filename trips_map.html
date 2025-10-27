@@ -210,12 +210,22 @@
   <div class="control-group">
     <label class="checkbox-label">
       <input type="checkbox" id="tripsCheckbox" checked>
-      Bike Routes
+      Individual Trips
     </label>
     <div class="sub-controls">
+      <div class="control-group">
+        <label>Filter by Trip:</label>
+        <select id="tripFilter">
+          <option value="all">All Trips</option>
+        </select>
+      </div>
       <label class="checkbox-label">
         <input type="checkbox" id="speedSegmentsCheckbox">
         Show Speed Colors
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" id="filterBadTrips" checked>
+        Filter Low-Quality Trips
       </label>
       <div class="radio-group">
         <label class="radio-label">
@@ -226,6 +236,19 @@
           <input type="radio" name="speedMode" value="categories">
           Speed Categories
         </label>
+      </div>
+    </div>
+  </div>
+  
+  <div class="control-group">
+    <label class="checkbox-label">
+      <input type="checkbox" id="aggregatedCheckbox">
+      Aggregated Routes (Avg Speed)
+    </label>
+    <div class="sub-controls">
+      <div class="control-group">
+        <label>Min Samples: <span id="minSamplesValue">2</span></label>
+        <input type="range" id="minSamplesSlider" min="2" max="20" step="1" value="2">
       </div>
     </div>
   </div>
@@ -294,32 +317,32 @@
 <div class="legend" id="speedLegend" style="display: none;">
   <h4>Speed (km/h)</h4>
   <div class="speed-legend-item">
-    <div class="speed-color-box" style="background: #808080;"></div>
-    <span>Stopped (0)</span>
+    <div class="speed-color-box" style="background: #DC2626;"></div>
+    <span>Stopped (0-5)</span>
   </div>
   <div class="speed-legend-item">
-    <div class="speed-color-box" style="background: #4CAF50;"></div>
-    <span>Very Slow (0-5)</span>
+    <div class="speed-color-box" style="background: #F97316;"></div>
+    <span>Very Slow (5-10)</span>
   </div>
   <div class="speed-legend-item">
-    <div class="speed-color-box" style="background: #8BC34A;"></div>
-    <span>Slow (5-10)</span>
+    <div class="speed-color-box" style="background: #FACC15;"></div>
+    <span>Slow (10-15)</span>
   </div>
   <div class="speed-legend-item">
-    <div class="speed-color-box" style="background: #FFEB3B;"></div>
-    <span>Moderate (10-15)</span>
+    <div class="speed-color-box" style="background: #BEF264;"></div>
+    <span>Moderate (15-20)</span>
   </div>
   <div class="speed-legend-item">
-    <div class="speed-color-box" style="background: #FF9800;"></div>
-    <span>Fast (15-20)</span>
+    <div class="speed-color-box" style="background: #4ADE80;"></div>
+    <span>Fast (20-25)</span>
   </div>
   <div class="speed-legend-item">
-    <div class="speed-color-box" style="background: #FF5722;"></div>
-    <span>Very Fast (20-25)</span>
+    <div class="speed-color-box" style="background: #22C55E;"></div>
+    <span>Very Fast (25-30)</span>
   </div>
   <div class="speed-legend-item">
-    <div class="speed-color-box" style="background: #F44336;"></div>
-    <span>Extreme (25+)</span>
+    <div class="speed-color-box" style="background: #059669;"></div>
+    <span>Extreme (30+)</span>
   </div>
 </div>
 
@@ -353,38 +376,71 @@ function getSpeedColorCategory(speed) {
 
 function getSpeedColorExpression(mode) {
   if (mode === 'gradient') {
-    // Smooth gradient based on Speed property from vector tiles
+    // Smooth gradient - RED for stopped/slow, GREEN for fast
+    // Adjusted ranges for better color distribution
     return [
       'interpolate',
       ['linear'],
-      ['coalesce', ['get', 'Speed'], 0],
-      -2, '#808080',  // Stopped/negative values
-      0, '#4CAF50',   // 0 km/h - green
-      5, '#8BC34A',   // 5 km/h - light green
-      10, '#FFEB3B',  // 10 km/h - yellow
-      15, '#FF9800',  // 15 km/h - orange
-      20, '#FF5722',  // 20 km/h - deep orange
-      25, '#F44336'   // 25+ km/h - red
+      ['to-number', ['coalesce', ['get', 'Speed'], 0]],
+      0, '#DC2626',    // 0 km/h - bright red (stopped)
+      5, '#F97316',    // 5 km/h - orange
+      8, '#FB923C',    // 8 km/h - light orange
+      12, '#FACC15',   // 12 km/h - yellow
+      16, '#BEF264',   // 16 km/h - lime
+      20, '#4ADE80',   // 20 km/h - light green
+      25, '#22C55E',   // 25 km/h - green
+      30, '#059669'    // 30+ km/h - dark green
     ];
   } else {
     // Step-based categories
     return [
       'step',
-      ['coalesce', ['get', 'Speed'], 0],
-      '#808080',  // Default for 0 or negative
-      0, '#4CAF50',   // 0-5 km/h
-      5, '#8BC34A',   // 5-10 km/h
-      10, '#FFEB3B',  // 10-15 km/h
-      15, '#FF9800',  // 15-20 km/h
-      20, '#FF5722',  // 20-25 km/h
-      25, '#F44336'   // 25+ km/h
+      ['to-number', ['coalesce', ['get', 'Speed'], 0]],
+      '#DC2626',    // 0 km/h - stopped
+      5, '#F97316',    // 5-10 km/h - very slow
+      10, '#FACC15',   // 10-15 km/h - slow
+      15, '#BEF264',   // 15-20 km/h - moderate
+      20, '#4ADE80',   // 20-25 km/h - fast
+      25, '#22C55E',   // 25-30 km/h - very fast
+      30, '#059669'    // 30+ km/h - extreme
+    ];
+  }
+}
+
+function getAggregatedSpeedColorExpression(mode) {
+  if (mode === 'gradient') {
+    // Same color scheme but using avg_speed property
+    return [
+      'interpolate',
+      ['linear'],
+      ['to-number', ['coalesce', ['get', 'avg_speed'], 0]],
+      0, '#DC2626',
+      5, '#F97316',
+      8, '#FB923C',
+      12, '#FACC15',
+      16, '#BEF264',
+      20, '#4ADE80',
+      25, '#22C55E',
+      30, '#059669'
+    ];
+  } else {
+    return [
+      'step',
+      ['to-number', ['coalesce', ['get', 'avg_speed'], 0]],
+      '#DC2626',
+      5, '#F97316',
+      10, '#FACC15',
+      15, '#BEF264',
+      20, '#4ADE80',
+      25, '#22C55E',
+      30, '#059669'
     ];
   }
 }
 
 map.on('load', async () => {
   
-  // Load trips from PMTiles
+  // Load trips from PMTiles (processed data with correct speeds)
   try {
     map.addSource('trips', {
       type: 'vector',
@@ -393,6 +449,9 @@ map.on('load', async () => {
 
     const response = await fetch('http://localhost:8080/data/pmtiles.json');
     const tileJSON = await response.json();
+    
+    console.log('TileJSON response:', tileJSON);
+    
     tripLayers = tileJSON.vector_layers.map(layer => layer.id);
 
     // Add all trip layers with default orange color
@@ -405,12 +464,22 @@ map.on('load', async () => {
         paint: {
           'line-color': '#FF6600',
           'line-width': 2,
-          'line-opacity': 0.8
+          'line-opacity': 0.4  // Reduced opacity to see overlaps
         }
       });
     });
 
     console.log('✅ Loaded', tripLayers.length, 'trip layers');
+    
+    // Populate trip filter dropdown
+    const tripFilter = document.getElementById('tripFilter');
+    tripLayers.forEach(layerId => {
+      const option = document.createElement('option');
+      option.value = layerId;
+      option.textContent = layerId.replace('_clean', '').replace(/_/g, ' ');
+      tripFilter.appendChild(option);
+    });
+    
     setupTripControls();
 
   } catch (err) {
@@ -503,14 +572,66 @@ map.on('load', async () => {
   } catch (err) {
     console.warn('Traffic lights not available:', err);
   }
+  
+  // Load aggregated routes
+  try {
+    const response = await fetch('http://localhost:8000/aggregated_routes.geojson');
+    const aggregatedData = await response.json();
+    
+    map.addSource('aggregated-routes', {
+      type: 'geojson',
+      data: aggregatedData
+    });
+    
+    map.addLayer({
+      id: 'aggregated-routes-layer',
+      type: 'line',
+      source: 'aggregated-routes',
+      paint: {
+        'line-color': getAggregatedSpeedColorExpression('gradient'),
+        'line-width': 4,
+        'line-opacity': 0.8
+      },
+      layout: {
+        'visibility': 'none'
+      }
+    });
+    
+    console.log('✅ Aggregated routes loaded');
+    setupAggregatedControls();
+    
+  } catch (err) {
+    console.warn('Aggregated routes not available:', err);
+  }
 });
 
 function setupTripControls() {
+  // Trip filter dropdown
+  document.getElementById('tripFilter').addEventListener('change', (e) => {
+    const selectedTrip = e.target.value;
+    
+    tripLayers.forEach(layerId => {
+      if (selectedTrip === 'all') {
+        map.setLayoutProperty(layerId, 'visibility', 'visible');
+        map.setPaintProperty(layerId, 'line-opacity', 0.4);
+      } else if (layerId === selectedTrip) {
+        map.setLayoutProperty(layerId, 'visibility', 'visible');
+        map.setPaintProperty(layerId, 'line-opacity', 0.9);
+      } else {
+        map.setLayoutProperty(layerId, 'visibility', 'none');
+      }
+    });
+  });
+  
   // Main trips toggle
   document.getElementById('tripsCheckbox').addEventListener('change', (e) => {
     const visibility = e.target.checked ? 'visible' : 'none';
+    const selectedTrip = document.getElementById('tripFilter').value;
+    
     tripLayers.forEach(layerId => {
-      map.setLayoutProperty(layerId, 'visibility', visibility);
+      if (selectedTrip === 'all' || layerId === selectedTrip) {
+        map.setLayoutProperty(layerId, 'visibility', visibility);
+      }
     });
   });
 
@@ -556,14 +677,17 @@ function setupTripControls() {
       const props = e.features[0].properties;
       const speed = props.Speed || 0;
       
+      console.log('Clicked feature properties:', props);
+      
       new mapboxgl.Popup()
         .setLngLat(e.lngLat)
         .setHTML(`
           <strong>Trip Info</strong><br>
           🚴 Speed: ${speed} km/h<br>
-          📍 Marker: ${props.marker || 'N/A'}<br>
-          📊 Samples: ${props.Samples || 'N/A'}<br>
-          ⏱️ Time: ${props['HH:mm:ss'] || 'N/A'}
+          📍 Distance: ${props.distance_m || props.gps_distance_m || 'N/A'} m<br>
+          ⏱️ Time diff: ${props.time_diff_s || 'N/A'} s<br>
+          🔧 HRot diff: ${props.hrot_diff || 'N/A'}<br>
+          📊 Sample diff: ${props.sample_diff || 'N/A'}
         `)
         .addTo(map);
     });
@@ -575,6 +699,76 @@ function setupTripControls() {
     map.on('mouseleave', layerId, () => {
       map.getCanvas().style.cursor = '';
     });
+  });
+}
+
+function setupAggregatedControls() {
+  // Aggregated routes toggle
+  document.getElementById('aggregatedCheckbox').addEventListener('change', (e) => {
+    const visibility = e.target.checked ? 'visible' : 'none';
+    map.setLayoutProperty('aggregated-routes-layer', 'visibility', visibility);
+    
+    // When showing aggregated, apply speed colors automatically
+    if (e.target.checked) {
+      const currentMode = document.querySelector('input[name="speedMode"]:checked').value;
+      map.setPaintProperty('aggregated-routes-layer', 'line-color', getAggregatedSpeedColorExpression(currentMode));
+      document.getElementById('speedLegend').style.display = 'block';
+      document.getElementById('mainLegend').style.display = 'none';
+    }
+  });
+  
+  // Min samples filter
+  document.getElementById('minSamplesSlider').addEventListener('input', (e) => {
+    const minSamples = parseInt(e.target.value);
+    document.getElementById('minSamplesValue').textContent = minSamples;
+    
+    const filter = ['>=', ['get', 'sample_count'], minSamples];
+    map.setFilter('aggregated-routes-layer', filter);
+  });
+  
+  // Speed mode changes should also update aggregated layer
+  document.querySelectorAll('input[name="speedMode"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      speedMode = e.target.value;
+      if (document.getElementById('speedSegmentsCheckbox').checked) {
+        tripLayers.forEach(layerId => {
+          map.setPaintProperty(layerId, 'line-color', getSpeedColorExpression(speedMode));
+        });
+      }
+      if (document.getElementById('aggregatedCheckbox').checked) {
+        map.setPaintProperty('aggregated-routes-layer', 'line-color', getAggregatedSpeedColorExpression(speedMode));
+      }
+    });
+  });
+  
+  // Click handler for aggregated routes
+  map.on('click', 'aggregated-routes-layer', (e) => {
+    const props = e.features[0].properties;
+    
+    new mapboxgl.Popup()
+      .setLngLat(e.lngLat)
+      .setHTML(`
+        <strong>Aggregated Route Segment</strong><br>
+        🚴 Avg Speed: ${props.avg_speed} km/h<br>
+        📊 Samples: ${props.sample_count} trips<br>
+        📈 Range: ${props.min_speed} - ${props.max_speed} km/h<br>
+        📍 Median: ${props.median_speed} km/h<br>
+        📉 Variance: ${props.speed_variance} km/h<br>
+        <br>
+        <strong>Debug Info:</strong><br>
+        📏 Avg GPS dist: ${props.avg_gps_distance_m || 'N/A'} m<br>
+        🔧 Avg HRot: ${props.avg_hrot_diff || 'N/A'}<br>
+        ⏱️ Avg time: ${props.avg_time_diff_s || 'N/A'} s
+      `)
+      .addTo(map);
+  });
+  
+  map.on('mouseenter', 'aggregated-routes-layer', () => {
+    map.getCanvas().style.cursor = 'pointer';
+  });
+  
+  map.on('mouseleave', 'aggregated-routes-layer', () => {
+    map.getCanvas().style.cursor = '';
   });
 }
 

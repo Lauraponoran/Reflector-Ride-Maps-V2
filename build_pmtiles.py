@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-DATA_ROOT = "sensor_data"
+DATA_ROOT = "processed_sensor_data"  # Changed from "sensor_data"
 PMTILES_FILE = os.path.join(DATA_ROOT, "trips.pmtiles")
 
 # Gather all cleaned GeoJSON files
@@ -20,7 +20,6 @@ if geojson_files:
         "-pk",
         "-pC"
     ] + geojson_files
-
 
     subprocess.run(cmd, check=True)
     print(f"✅ PMTiles saved to {PMTILES_FILE}")
