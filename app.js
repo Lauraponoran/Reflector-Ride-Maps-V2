@@ -1,4 +1,13 @@
 // app.js
+console.log('🚀 Starting bike sensor visualization...');
+console.log('Config:', CONFIG);
+
+// Check if Mapbox token is set
+if (!CONFIG.MAPBOX_TOKEN || CONFIG.MAPBOX_TOKEN === 'YOUR_MAPBOX_TOKEN_HERE') {
+  alert('⚠️ Please set your Mapbox token in config.js!');
+  console.error('Mapbox token not configured');
+}
+
 mapboxgl.accessToken = CONFIG.MAPBOX_TOKEN;
 
 const map = new mapboxgl.Map({
@@ -10,6 +19,16 @@ const map = new mapboxgl.Map({
 
 let tripLayers = [];
 let speedMode = 'gradient';
+
+// Add error handler for map
+map.on('error', (e) => {
+  console.error('❌ Map error:', e);
+});
+
+// Add load confirmation
+map.on('load', () => {
+  console.log('✅ Base map loaded successfully');
+});
 
 // Speed color functions
 function getSpeedColorExpression(mode) {
@@ -73,9 +92,12 @@ function getAggregatedSpeedColorExpression(mode) {
 }
 
 map.on('load', async () => {
+  console.log('✅ Base map loaded, now loading data...');
   
   // Load trips from PMTiles
   try {
+    console.log('📡 Fetching PMTiles from:', CONFIG.PMTILES_URL);
+    
     map.addSource('trips', {
       type: 'vector',
       url: CONFIG.PMTILES_URL
@@ -84,9 +106,10 @@ map.on('load', async () => {
     const response = await fetch(CONFIG.PMTILES_URL);
     const tileJSON = await response.json();
     
-    console.log('TileJSON response:', tileJSON);
+    console.log('✅ TileJSON response:', tileJSON);
     
     tripLayers = tileJSON.vector_layers.map(layer => layer.id);
+    console.log('📊 Found trip layers:', tripLayers);
 
     // Add all trip layers with default orange color
     tripLayers.forEach(layerId => {
@@ -118,13 +141,17 @@ map.on('load', async () => {
     updateStats();
 
   } catch (err) {
-    console.warn('Trips not available:', err);
+    console.error('❌ Error loading trips:', err);
   }
   
   // Load aggregated routes
   try {
+    console.log('📡 Fetching aggregated routes from:', CONFIG.AGGREGATED_ROUTES_URL);
+    
     const response = await fetch(CONFIG.AGGREGATED_ROUTES_URL);
     const aggregatedData = await response.json();
+    
+    console.log('✅ Aggregated data loaded:', aggregatedData.features.length, 'features');
     
     map.addSource('aggregated-routes', {
       type: 'geojson',
@@ -145,11 +172,11 @@ map.on('load', async () => {
       }
     });
     
-    console.log('✅ Aggregated routes loaded');
+    console.log('✅ Aggregated routes layer added');
     setupAggregatedControls();
     
   } catch (err) {
-    console.warn('Aggregated routes not available:', err);
+    console.error('❌ Error loading aggregated routes:', err);
   }
 });
 

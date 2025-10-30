@@ -4,6 +4,9 @@
   "description": "1. Combined processor → processes individual trips → processed_sensor_data/ 2. This aggregator → combines all trips → aggregated_routes.geojson (one file showing typical speeds)",
   "main": "app.js",
   "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
