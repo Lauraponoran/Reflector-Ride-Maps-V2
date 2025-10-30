@@ -5,10 +5,16 @@
   <meta charset="utf-8">
   <title>Bike Sensor Data Visualization</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
+  <!-- Use MapLibre GL JS instead of Mapbox (open source, better PMTiles support) -->
+  <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
   <link href="styles.css" rel="stylesheet" />
-  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+  <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+  <script src="https://unpkg.com/pmtiles@3.0.4/dist/pmtiles.js"></script>
+  <!-- Make maplibregl available as mapboxgl for compatibility -->
+  <script>
+    var mapboxgl = maplibregl;
+  </script>
 </head>
 <body>
 <div id="map"></div>
@@ -74,35 +80,41 @@
 <div class="legend" id="speedLegend" style="display: none;">
   <h4>Speed (km/h)</h4>
   <div class="speed-legend-item">
+    <div class="speed-color-box" style="background: #808080;"></div>
+    <span>Stopped (0-2)</span>
+  </div>
+  <div class="speed-legend-item">
     <div class="speed-color-box" style="background: #DC2626;"></div>
-    <span>Stopped (0-5)</span>
+    <span>Very Slow (2-5)</span>
   </div>
   <div class="speed-legend-item">
     <div class="speed-color-box" style="background: #F97316;"></div>
-    <span>Very Slow (5-10)</span>
+    <span>Slow (5-10)</span>
   </div>
   <div class="speed-legend-item">
     <div class="speed-color-box" style="background: #FACC15;"></div>
-    <span>Slow (10-15)</span>
+    <span>Moderate (10-15)</span>
   </div>
   <div class="speed-legend-item">
     <div class="speed-color-box" style="background: #BEF264;"></div>
-    <span>Moderate (15-20)</span>
+    <span>Fast (15-20)</span>
   </div>
   <div class="speed-legend-item">
     <div class="speed-color-box" style="background: #4ADE80;"></div>
-    <span>Fast (20-25)</span>
+    <span>Very Fast (20-25)</span>
   </div>
   <div class="speed-legend-item">
     <div class="speed-color-box" style="background: #22C55E;"></div>
-    <span>Very Fast (25-30)</span>
+    <span>Extreme (25-30)</span>
   </div>
   <div class="speed-legend-item">
     <div class="speed-color-box" style="background: #059669;"></div>
-    <span>Extreme (30+)</span>
+    <span>Super Fast (30+)</span>
   </div>
 </div>
 
+<!-- Load config and app as modules -->
+<script type="module" src="config.js"></script>
 <script type="module" src="app.js"></script>
 </body>
 </html>

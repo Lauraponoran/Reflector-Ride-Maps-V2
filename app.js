@@ -1,4 +1,6 @@
 // app.js
+import { CONFIG } from './config.js';
+
 console.log('🚀 Starting bike sensor visualization...');
 console.log('Config:', CONFIG);
 
@@ -37,26 +39,27 @@ function getSpeedColorExpression(mode) {
       'interpolate',
       ['linear'],
       ['to-number', ['coalesce', ['get', 'Speed'], 0]],
-      0, '#DC2626',
-      5, '#F97316',
-      8, '#FB923C',
-      12, '#FACC15',
-      16, '#BEF264',
-      20, '#4ADE80',
-      25, '#22C55E',
-      30, '#059669'
+      0, '#808080',    // Gray for stopped
+      2, '#DC2626',    // Red for very slow
+      5, '#F97316',    // Orange
+      8, '#FACC15',    // Yellow
+      12, '#BEF264',   // Light green
+      16, '#4ADE80',   // Green
+      20, '#22C55E',   // Dark green
+      25, '#059669'    // Very dark green
     ];
   } else {
     return [
       'step',
       ['to-number', ['coalesce', ['get', 'Speed'], 0]],
-      '#DC2626',
-      5, '#F97316',
-      10, '#FACC15',
-      15, '#BEF264',
-      20, '#4ADE80',
-      25, '#22C55E',
-      30, '#059669'
+      '#808080',  // Gray for stopped (0)
+      2, '#DC2626',   // Red (2-5)
+      5, '#F97316',   // Orange (5-10)
+      10, '#FACC15',  // Yellow (10-15)
+      15, '#BEF264',  // Light green (15-20)
+      20, '#4ADE80',  // Green (20-25)
+      25, '#22C55E',  // Dark green (25-30)
+      30, '#059669'   // Very dark green (30+)
     ];
   }
 }
@@ -96,22 +99,37 @@ map.on('load', async () => {
   
   // Load trips from PMTiles
   try {
-    console.log('📡 Fetching PMTiles from:', CONFIG.PMTILES_URL);
+    console.log('📡 Loading PMTiles from:', CONFIG.PMTILES_URL);
     
+    // PMTiles v2 syntax - simpler approach
+    const protocol = new pmtiles.Protocol();
+    mapboxgl.addProtocol('pmtiles', protocol.tile);
+    
+    // Create PMTiles instance with full URL
+    const pmtilesUrl = `${window.location.origin}${CONFIG.PMTILES_URL}`;
+    const p = new pmtiles.PMTiles(pmtilesUrl);
+    protocol.add(p);
+    
+    // Get metadata to find layer names
+    const header = await p.getHeader();
+    const metadata = await p.getMetadata();
+    
+    console.log('✅ PMTiles metadata:', metadata);
+    
+    // Get layer names from metadata
+    const layers = metadata.vector_layers || [];
+    tripLayers = layers.map(l => l.id);
+    
+    console.log('📊 Found', tripLayers.length, 'trip layers:', tripLayers);
+    
+    // Add PMTiles source using the custom protocol
     map.addSource('trips', {
       type: 'vector',
-      url: CONFIG.PMTILES_URL
+      url: `pmtiles://${pmtilesUrl}`,
+      attribution: 'Bike sensor data'
     });
-
-    const response = await fetch(CONFIG.PMTILES_URL);
-    const tileJSON = await response.json();
     
-    console.log('✅ TileJSON response:', tileJSON);
-    
-    tripLayers = tileJSON.vector_layers.map(layer => layer.id);
-    console.log('📊 Found trip layers:', tripLayers);
-
-    // Add all trip layers with default orange color
+    // Add a layer for each trip in the PMTiles
     tripLayers.forEach(layerId => {
       map.addLayer({
         id: layerId,
@@ -133,7 +151,7 @@ map.on('load', async () => {
     tripLayers.forEach(layerId => {
       const option = document.createElement('option');
       option.value = layerId;
-      option.textContent = layerId.replace('_clean', '').replace(/_/g, ' ');
+      option.textContent = layerId.replace(/_/g, ' ');
       tripFilter.appendChild(option);
     });
     
@@ -142,6 +160,7 @@ map.on('load', async () => {
 
   } catch (err) {
     console.error('❌ Error loading trips:', err);
+    console.error('Full error:', err.stack);
   }
   
   // Load aggregated routes
@@ -245,7 +264,7 @@ function setupTripControls() {
     });
   });
 
-  // Add click handler for trip layers to show speed info
+  // Add click handler for trip layers
   tripLayers.forEach(layerId => {
     map.on('click', layerId, (e) => {
       const props = e.features[0].properties;
@@ -254,7 +273,7 @@ function setupTripControls() {
       new mapboxgl.Popup()
         .setLngLat(e.lngLat)
         .setHTML(`
-          <strong>Trip Segment</strong><br>
+          <strong>Trip: ${layerId}</strong><br>
           🚴 Speed: ${speed} km/h<br>
           📍 Distance: ${props.distance_m || props.gps_distance_m || 'N/A'} m<br>
           ⏱️ Time diff: ${props.time_diff_s || 'N/A'} s<br>
