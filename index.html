@@ -1,17 +1,14 @@
-<!-- index.html -->
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <title>Bike Sensor Data Visualization</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Use MapLibre GL JS instead of Mapbox (open source, better PMTiles support) -->
   <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
   <link href="styles.css" rel="stylesheet" />
   <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
   <script src="https://unpkg.com/pmtiles@3.0.4/dist/pmtiles.js"></script>
-  <!-- Make maplibregl available as mapboxgl for compatibility -->
   <script>
     var mapboxgl = maplibregl;
   </script>
@@ -20,60 +17,48 @@
 <div id="map"></div>
 
 <div id="controls">
-  <h3>🚴 Bike Sensor Data</h3>
+  <h3>🚴 Bike Routes</h3>
   
   <div class="control-group">
     <label class="checkbox-label">
-      <input type="checkbox" id="tripsCheckbox" checked>
-      Individual Trips
+      <input type="checkbox" id="speedColorsCheckbox">
+      Show Speed Colors
     </label>
-    <div class="sub-controls">
-      <div class="control-group">
-        <label>Filter by Trip:</label>
-        <select id="tripFilter">
-          <option value="all">All Trips</option>
-        </select>
-      </div>
-      <label class="checkbox-label">
-        <input type="checkbox" id="speedSegmentsCheckbox">
-        Show Speed Colors
-      </label>
-      <div class="radio-group">
-        <label class="radio-label">
-          <input type="radio" name="speedMode" value="gradient" checked>
-          Smooth Gradient
-        </label>
-        <label class="radio-label">
-          <input type="radio" name="speedMode" value="categories">
-          Speed Categories
-        </label>
-      </div>
-    </div>
   </div>
   
-  <div class="control-group">
-    <label class="checkbox-label">
-      <input type="checkbox" id="aggregatedCheckbox">
-      Aggregated Routes (Avg Speed)
+  <div class="radio-group" id="speedModeGroup" style="display: none;">
+    <label class="radio-label">
+      <input type="radio" name="speedMode" value="gradient" checked>
+      Smooth Gradient
     </label>
-    <div class="sub-controls">
-      <div class="control-group">
-        <label>Min Samples: <span id="minSamplesValue">2</span></label>
-        <input type="range" id="minSamplesSlider" min="2" max="20" step="1" value="2">
-      </div>
-    </div>
+    <label class="radio-label">
+      <input type="radio" name="speedMode" value="categories">
+      Speed Categories
+    </label>
   </div>
 </div>
 
 <div id="stats">
-  <h4>Trip Statistics</h4>
+  <h4>Trip Info</h4>
   <div class="stat-row">
-    <span class="stat-label">Active trips:</span>
+    <span class="stat-label">Total trips:</span>
     <span class="stat-value" id="statTrips">—</span>
   </div>
   <div class="stat-row">
-    <span class="stat-label">Avg speed:</span>
+    <span class="stat-label">Total distance:</span>
+    <span class="stat-value" id="statDistance">—</span>
+  </div>
+  <div class="stat-row">
+    <span class="stat-label">Average speed:</span>
     <span class="stat-value" id="statAvgSpeed">—</span>
+  </div>
+  <div class="stat-row">
+    <span class="stat-label">Total time:</span>
+    <span class="stat-value" id="statTotalTime">—</span>
+  </div>
+  <div class="stat-row" id="selectedTripRow" style="display: none;">
+    <span class="stat-label">Selected:</span>
+    <span class="stat-value" id="selectedTrip">—</span>
   </div>
 </div>
 
@@ -96,24 +81,19 @@
     <span>Moderate (10-15)</span>
   </div>
   <div class="speed-legend-item">
-    <div class="speed-color-box" style="background: #BEF264;"></div>
+    <div class="speed-color-box" style="background: #22C55E;"></div>
     <span>Fast (15-20)</span>
   </div>
   <div class="speed-legend-item">
-    <div class="speed-color-box" style="background: #4ADE80;"></div>
+    <div class="speed-color-box" style="background: #3B82F6;"></div>
     <span>Very Fast (20-25)</span>
   </div>
   <div class="speed-legend-item">
-    <div class="speed-color-box" style="background: #22C55E;"></div>
-    <span>Extreme (25-30)</span>
-  </div>
-  <div class="speed-legend-item">
-    <div class="speed-color-box" style="background: #059669;"></div>
-    <span>Super Fast (30+)</span>
+    <div class="speed-color-box" style="background: #6366F1;"></div>
+    <span>Extreme (25+)</span>
   </div>
 </div>
 
-<!-- Load config and app as modules -->
 <script type="module" src="config.js"></script>
 <script type="module" src="app.js"></script>
 </body>

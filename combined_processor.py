@@ -113,7 +113,7 @@ def process_geojson_file(filepath, trip_id, debug=False):
                 continue
             
             samples_value = props.get('Samples', 0)
-            samples_int = safe_int(samples_value, idx)
+            samples_int = safe_int(samples_value, 0)  # changed default from idx → 0
             
             points.append({
                 'lon': float(lon),
@@ -156,9 +156,17 @@ def process_geojson_file(filepath, trip_id, debug=False):
             
             end_point = points[j]
             
-            # Calculate sample difference and time
-            sample_diff = end_point['samples'] - start_point['samples']
-            time_diff_seconds = sample_diff * SECONDS_PER_SAMPLE
+            # ✅ Prefer actual time difference if timestamps exist
+            if start_point['time'] and end_point['time']:
+                time_diff_seconds = (end_point['time'] - start_point['time']).total_seconds()
+            else:
+                sample_diff = end_point['samples'] - start_point['samples']
+                time_diff_seconds = sample_diff * SECONDS_PER_SAMPLE
+            
+            # ✅ Skip unrealistic or zero durations
+            if time_diff_seconds <= 0 or time_diff_seconds > 600:
+                i = j
+                continue
             
             # Calculate speed from wheel rotations
             hrot_diff = end_point['hrot'] - start_point['hrot']
@@ -176,14 +184,19 @@ def process_geojson_file(filepath, trip_id, debug=False):
                 end_point['lon'], end_point['lat']
             )
             
+            # ✅ Skip unrealistic GPS jumps
+            if gps_distance > 1000:
+                i = j
+                continue
+            
             if debug and len(new_features) < 3:
                 print(f"  DEBUG - Speed calc for segment {len(new_features)}:")
                 print(f"    Points {i} to {j} (skipped {j-i-1} stationary)")
                 print(f"    hrot_diff={hrot_diff}, speed_kmh={speed_kmh:.1f}")
             
-            # Cap speed at 50 km/h for bikes
-            if speed_kmh > 50:
-                speed_kmh = 50
+            # ✅ Cap speed more safely (40 km/h)
+            if speed_kmh > 40:
+                speed_kmh = 40
             
             # Only create segments with movement and reasonable speeds
             if (start_point['lon'] != end_point['lon'] or 
@@ -203,7 +216,7 @@ def process_geojson_file(filepath, trip_id, debug=False):
                         'marker': start_point['marker'],
                         'trip_id': trip_id,
                         'hrot_diff': hrot_diff,
-                        'sample_diff': sample_diff,
+                        'sample_diff': end_point['samples'] - start_point['samples'],
                         'time_diff_s': round(time_diff_seconds, 3),
                         'gps_distance_m': round(gps_distance, 1),
                         'original_speed': start_point['original_speed']

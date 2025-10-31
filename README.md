@@ -18,10 +18,8 @@ Reflector-Ride-Maps/
 ├── processed_sensor_data/          # Speed-calculated trips (generated)
 ├── public/
 │   ├── trips.pmtiles               # Compressed trip data for map
-│   └── aggregated_routes.geojson   # Averaged speed routes
 ├── csv_to_geojson_converter.py     # Step 1: Convert CSVs to GeoJSON
 ├── combined_processor.py           # Step 2: Calculate speeds from sensor data
-├── aggregate_routes.py             # Step 3: Aggregate speeds across trips
 ├── build_pmtiles.py                # Step 4: Build PMTiles for web
 ├── index.html                      # Main visualization page
 ├── app.js                          # Map logic and interactions

@@ -1,14 +1,7 @@
 // app.js
 import { CONFIG } from './config.js';
 
-console.log('🚀 Starting bike sensor visualization...');
-console.log('Config:', CONFIG);
-
-// Check if Mapbox token is set
-if (!CONFIG.MAPBOX_TOKEN || CONFIG.MAPBOX_TOKEN === 'YOUR_MAPBOX_TOKEN_HERE') {
-  alert('⚠️ Please set your Mapbox token in config.js!');
-  console.error('Mapbox token not configured');
-}
+console.log('🚀 Starting bike visualization...');
 
 mapboxgl.accessToken = CONFIG.MAPBOX_TOKEN;
 
@@ -19,18 +12,18 @@ const map = new mapboxgl.Map({
   zoom: CONFIG.MAP_ZOOM
 });
 
+// Make map accessible for debugging
+window.map = map;
+
 let tripLayers = [];
 let speedMode = 'gradient';
+let showSpeedColors = false;
+let selectedTrip = null;
+let tripStatsCalculated = false;
+let allTripData = {}; // Store complete trip stats for each layer
 
-// Add error handler for map
-map.on('error', (e) => {
-  console.error('❌ Map error:', e);
-});
-
-// Add load confirmation
-map.on('load', () => {
-  console.log('✅ Base map loaded successfully');
-});
+// Default orange color for routes
+const DEFAULT_COLOR = '#FF6600';
 
 // Speed color functions
 function getSpeedColorExpression(mode) {
@@ -39,97 +32,61 @@ function getSpeedColorExpression(mode) {
       'interpolate',
       ['linear'],
       ['to-number', ['coalesce', ['get', 'Speed'], 0]],
-      0, '#808080',    // Gray for stopped
-      2, '#DC2626',    // Red for very slow
-      5, '#F97316',    // Orange
-      8, '#FACC15',    // Yellow
-      12, '#BEF264',   // Light green
-      16, '#4ADE80',   // Green
-      20, '#22C55E',   // Dark green
-      25, '#059669'    // Very dark green
+      0, '#808080',
+      2, '#DC2626',
+      5, '#F97316',
+      10, '#FACC15',
+      15, '#22C55E',
+      20, '#3B82F6',
+      25, '#6366F1'
     ];
   } else {
     return [
       'step',
       ['to-number', ['coalesce', ['get', 'Speed'], 0]],
-      '#808080',  // Gray for stopped (0)
-      2, '#DC2626',   // Red (2-5)
-      5, '#F97316',   // Orange (5-10)
-      10, '#FACC15',  // Yellow (10-15)
-      15, '#BEF264',  // Light green (15-20)
-      20, '#4ADE80',  // Green (20-25)
-      25, '#22C55E',  // Dark green (25-30)
-      30, '#059669'   // Very dark green (30+)
-    ];
-  }
-}
-
-function getAggregatedSpeedColorExpression(mode) {
-  if (mode === 'gradient') {
-    return [
-      'interpolate',
-      ['linear'],
-      ['to-number', ['coalesce', ['get', 'avg_speed'], 0]],
-      0, '#DC2626',
-      5, '#F97316',
-      8, '#FB923C',
-      12, '#FACC15',
-      16, '#BEF264',
-      20, '#4ADE80',
-      25, '#22C55E',
-      30, '#059669'
-    ];
-  } else {
-    return [
-      'step',
-      ['to-number', ['coalesce', ['get', 'avg_speed'], 0]],
-      '#DC2626',
+      '#808080',
+      2, '#DC2626',
       5, '#F97316',
       10, '#FACC15',
-      15, '#BEF264',
-      20, '#4ADE80',
-      25, '#22C55E',
-      30, '#059669'
+      15, '#22C55E',
+      20, '#3B82F6',
+      25, '#6366F1'
     ];
   }
 }
 
+map.on('error', (e) => {
+  console.error('❌ Map error:', e);
+});
+
 map.on('load', async () => {
-  console.log('✅ Base map loaded, now loading data...');
-  
-  // Load trips from PMTiles
+  console.log('✅ Map loaded');
+
   try {
-    console.log('📡 Loading PMTiles from:', CONFIG.PMTILES_URL);
-    
-    // PMTiles v2 syntax - simpler approach
+    console.log('📡 Loading bike trips from:', CONFIG.PMTILES_URL);
+
+    // Setup PMTiles
     const protocol = new pmtiles.Protocol();
     mapboxgl.addProtocol('pmtiles', protocol.tile);
-    
-    // Create PMTiles instance with full URL
+
     const pmtilesUrl = `${window.location.origin}${CONFIG.PMTILES_URL}`;
     const p = new pmtiles.PMTiles(pmtilesUrl);
     protocol.add(p);
-    
-    // Get metadata to find layer names
-    const header = await p.getHeader();
+
     const metadata = await p.getMetadata();
-    
-    console.log('✅ PMTiles metadata:', metadata);
-    
-    // Get layer names from metadata
+    console.log('✅ PMTiles loaded:', metadata);
+
     const layers = metadata.vector_layers || [];
     tripLayers = layers.map(l => l.id);
-    
-    console.log('📊 Found', tripLayers.length, 'trip layers:', tripLayers);
-    
-    // Add PMTiles source using the custom protocol
+
+    console.log('📊 Found', tripLayers.length, 'trips');
+
     map.addSource('trips', {
       type: 'vector',
       url: `pmtiles://${pmtilesUrl}`,
       attribution: 'Bike sensor data'
     });
-    
-    // Add a layer for each trip in the PMTiles
+
     tripLayers.forEach(layerId => {
       map.addLayer({
         id: layerId,
@@ -137,148 +94,145 @@ map.on('load', async () => {
         source: 'trips',
         'source-layer': layerId,
         paint: {
-          'line-color': '#FF6600',
-          'line-width': 2,
-          'line-opacity': 0.4
+          'line-color': DEFAULT_COLOR,
+          'line-width': 3,
+          'line-opacity': 0.7
         }
       });
     });
 
-    console.log('✅ Loaded', tripLayers.length, 'trip layers');
-    
-    // Populate trip filter dropdown
-    const tripFilter = document.getElementById('tripFilter');
-    tripLayers.forEach(layerId => {
-      const option = document.createElement('option');
-      option.value = layerId;
-      option.textContent = layerId.replace(/_/g, ' ');
-      tripFilter.appendChild(option);
+    console.log('✅ All trips loaded and visible');
+
+    map.setCenter([4.9041, 52.3676]); // Amsterdam
+    map.setZoom(13);
+
+    setupControls();
+    setupClickHandlers();
+
+    // Calculate all trip stats once map is idle
+    map.once('idle', () => {
+      console.log('Map idle, calculating all trip stats');
+      calculateAllTripStats();
     });
-    
-    setupTripControls();
-    updateStats();
 
   } catch (err) {
     console.error('❌ Error loading trips:', err);
-    console.error('Full error:', err.stack);
-  }
-  
-  // Load aggregated routes
-  try {
-    console.log('📡 Fetching aggregated routes from:', CONFIG.AGGREGATED_ROUTES_URL);
-    
-    const response = await fetch(CONFIG.AGGREGATED_ROUTES_URL);
-    const aggregatedData = await response.json();
-    
-    console.log('✅ Aggregated data loaded:', aggregatedData.features.length, 'features');
-    
-    map.addSource('aggregated-routes', {
-      type: 'geojson',
-      data: aggregatedData
-    });
-    
-    map.addLayer({
-      id: 'aggregated-routes-layer',
-      type: 'line',
-      source: 'aggregated-routes',
-      paint: {
-        'line-color': getAggregatedSpeedColorExpression('gradient'),
-        'line-width': 4,
-        'line-opacity': 0.8
-      },
-      layout: {
-        'visibility': 'none'
-      }
-    });
-    
-    console.log('✅ Aggregated routes layer added');
-    setupAggregatedControls();
-    
-  } catch (err) {
-    console.error('❌ Error loading aggregated routes:', err);
   }
 });
 
-function setupTripControls() {
-  // Trip filter dropdown
-  document.getElementById('tripFilter').addEventListener('change', (e) => {
-    const selectedTrip = e.target.value;
-    
-    tripLayers.forEach(layerId => {
-      if (selectedTrip === 'all') {
-        map.setLayoutProperty(layerId, 'visibility', 'visible');
-        map.setPaintProperty(layerId, 'line-opacity', 0.4);
-      } else if (layerId === selectedTrip) {
-        map.setLayoutProperty(layerId, 'visibility', 'visible');
-        map.setPaintProperty(layerId, 'line-opacity', 0.9);
-      } else {
-        map.setLayoutProperty(layerId, 'visibility', 'none');
-      }
-    });
-    updateStats();
-  });
-  
-  // Main trips toggle
-  document.getElementById('tripsCheckbox').addEventListener('change', (e) => {
-    const visibility = e.target.checked ? 'visible' : 'none';
-    const selectedTrip = document.getElementById('tripFilter').value;
-    
-    tripLayers.forEach(layerId => {
-      if (selectedTrip === 'all' || layerId === selectedTrip) {
-        map.setLayoutProperty(layerId, 'visibility', visibility);
-      }
-    });
-  });
+function setupControls() {
+  const speedColorsCheckbox = document.getElementById('speedColorsCheckbox');
+  if (!speedColorsCheckbox) {
+    console.error('Missing speedColorsCheckbox element');
+    return;
+  }
 
-  // Speed segments toggle
-  document.getElementById('speedSegmentsCheckbox').addEventListener('change', (e) => {
+  speedColorsCheckbox.addEventListener('change', (e) => {
+    showSpeedColors = e.target.checked;
+    console.log('Speed colors toggled:', showSpeedColors);
+
     const speedLegend = document.getElementById('speedLegend');
-    
-    if (e.target.checked) {
+    const speedModeGroup = document.getElementById('speedModeGroup');
+
+    if (showSpeedColors) {
+      const colorExpression = getSpeedColorExpression(speedMode);
       tripLayers.forEach(layerId => {
-        map.setPaintProperty(layerId, 'line-color', getSpeedColorExpression(speedMode));
-        map.setPaintProperty(layerId, 'line-width', 3);
+        map.setPaintProperty(layerId, 'line-color', colorExpression);
       });
       speedLegend.style.display = 'block';
+      speedModeGroup.style.display = 'block';
     } else {
       tripLayers.forEach(layerId => {
-        map.setPaintProperty(layerId, 'line-color', '#FF6600');
-        map.setPaintProperty(layerId, 'line-width', 2);
+        map.setPaintProperty(layerId, 'line-color', DEFAULT_COLOR);
       });
       speedLegend.style.display = 'none';
+      speedModeGroup.style.display = 'none';
     }
   });
 
-  // Speed mode radio buttons
   document.querySelectorAll('input[name="speedMode"]').forEach(radio => {
     radio.addEventListener('change', (e) => {
       speedMode = e.target.value;
-      if (document.getElementById('speedSegmentsCheckbox').checked) {
+      if (showSpeedColors) {
         tripLayers.forEach(layerId => {
           map.setPaintProperty(layerId, 'line-color', getSpeedColorExpression(speedMode));
         });
       }
-      if (document.getElementById('aggregatedCheckbox').checked) {
-        map.setPaintProperty('aggregated-routes-layer', 'line-color', getAggregatedSpeedColorExpression(speedMode));
-      }
     });
   });
+}
 
-  // Add click handler for trip layers
+// ✅ New helper: get full-trip stats (not limited to visible segments)
+async function getFullTripStats(layerId) {
+  if (allTripData[layerId]) return allTripData[layerId];
+
+  const features = map.querySourceFeatures('trips', { sourceLayer: layerId });
+  let totalDistance = 0;
+  let totalTime = 0;
+
+  features.forEach(f => {
+    totalDistance += f.properties.gps_distance_m || 0;
+    totalTime += f.properties.time_diff_s || 0;
+  });
+
+  const distanceKm = totalDistance / 1000;
+  const avgSpeed = totalTime > 0 ? (distanceKm / (totalTime / 3600)) : 0;
+
+  const stats = {
+    distanceKm: distanceKm.toFixed(2),
+    avgSpeed: avgSpeed.toFixed(1),
+    totalTime
+  };
+
+  allTripData[layerId] = stats;
+  return stats;
+}
+
+function setupClickHandlers() {
   tripLayers.forEach(layerId => {
-    map.on('click', layerId, (e) => {
+    map.on('click', layerId, async (e) => {
+      console.log('Layer clicked:', layerId);
+      e.preventDefault();
+      if (e.originalEvent) e.originalEvent.stopPropagation();
+
       const props = e.features[0].properties;
       const speed = props.Speed || 0;
-      
+
+      selectedTrip = layerId;
+      tripLayers.forEach(id => {
+        try {
+          if (id === layerId) {
+            map.setPaintProperty(id, 'line-opacity', 1.0);
+            map.setPaintProperty(id, 'line-width', 4);
+          } else {
+            map.setPaintProperty(id, 'line-opacity', 0.15);
+            map.setPaintProperty(id, 'line-width', 2);
+          }
+        } catch (err) {
+          console.error('Error updating layer:', id, err);
+        }
+      });
+
+      document.getElementById('selectedTripRow').style.display = 'flex';
+      const tripName = layerId.replace(/_/g, ' ').replace(/processed/gi, '').trim();
+      document.getElementById('selectedTrip').textContent = tripName;
+
+      // ✅ Use full-trip stats
+      const stats = await getFullTripStats(layerId);
+      const { distanceKm, avgSpeed, totalTime } = stats;
+
+      const durationMinutes = Math.floor(totalTime / 60);
+      const durationSeconds = Math.round(totalTime % 60);
+      const durationFormatted = `${durationMinutes}:${durationSeconds.toString().padStart(2, '0')}`;
+
       new mapboxgl.Popup()
         .setLngLat(e.lngLat)
         .setHTML(`
-          <strong>Trip: ${layerId}</strong><br>
-          🚴 Speed: ${speed} km/h<br>
-          📍 Distance: ${props.distance_m || props.gps_distance_m || 'N/A'} m<br>
-          ⏱️ Time diff: ${props.time_diff_s || 'N/A'} s<br>
-          🔧 HRot diff: ${props.hrot_diff || 'N/A'}<br>
-          📊 Sample diff: ${props.sample_diff || 'N/A'}
+          <strong>${tripName}</strong><br>
+          🚴 Speed at point: ${speed} km/h<br>
+          📊 Average speed: ${avgSpeed} km/h<br>
+          📍 Total distance: ${distanceKm} km<br>
+          ⏱️ Duration: ${durationFormatted}
         `)
         .addTo(map);
     });
@@ -291,60 +245,88 @@ function setupTripControls() {
       map.getCanvas().style.cursor = '';
     });
   });
-}
 
-function setupAggregatedControls() {
-  // Aggregated routes toggle
-  document.getElementById('aggregatedCheckbox').addEventListener('change', (e) => {
-    const visibility = e.target.checked ? 'visible' : 'none';
-    map.setLayoutProperty('aggregated-routes-layer', 'visibility', visibility);
-    
-    if (e.target.checked) {
-      const currentMode = document.querySelector('input[name="speedMode"]:checked').value;
-      map.setPaintProperty('aggregated-routes-layer', 'line-color', getAggregatedSpeedColorExpression(currentMode));
-      document.getElementById('speedLegend').style.display = 'block';
+  // Click map background to reset
+  map.on('click', (e) => {
+    if (!e.defaultPrevented && selectedTrip) {
+      selectedTrip = null;
+      tripLayers.forEach(layerId => {
+        try {
+          map.setPaintProperty(layerId, 'line-opacity', 0.7);
+          map.setPaintProperty(layerId, 'line-width', 3);
+        } catch (err) {
+          console.error('Error resetting layer:', layerId, err);
+        }
+      });
+      document.getElementById('selectedTripRow').style.display = 'none';
     }
   });
-  
-  // Min samples filter
-  document.getElementById('minSamplesSlider').addEventListener('input', (e) => {
-    const minSamples = parseInt(e.target.value);
-    document.getElementById('minSamplesValue').textContent = minSamples;
-    
-    const filter = ['>=', ['get', 'sample_count'], minSamples];
-    map.setFilter('aggregated-routes-layer', filter);
-  });
-  
-  // Click handler for aggregated routes
-  map.on('click', 'aggregated-routes-layer', (e) => {
-    const props = e.features[0].properties;
-    
-    new mapboxgl.Popup()
-      .setLngLat(e.lngLat)
-      .setHTML(`
-        <strong>Aggregated Route Segment</strong><br>
-        🚴 Avg Speed: ${props.avg_speed} km/h<br>
-        📊 Samples: ${props.sample_count} trips<br>
-        📈 Range: ${props.min_speed} - ${props.max_speed} km/h<br>
-        📍 Median: ${props.median_speed} km/h<br>
-        📉 Variance: ${props.speed_variance} km/h
-      `)
-      .addTo(map);
-  });
-  
-  map.on('mouseenter', 'aggregated-routes-layer', () => {
-    map.getCanvas().style.cursor = 'pointer';
-  });
-  
-  map.on('mouseleave', 'aggregated-routes-layer', () => {
-    map.getCanvas().style.cursor = '';
-  });
+}
+
+function calculateAllTripStats() {
+  console.log('Calculating stats for all trips...');
+
+  let totalDistance = 0;
+  let totalTime = 0;
+  let tripCount = 0;
+
+  const originalCenter = map.getCenter();
+  const originalZoom = map.getZoom();
+  map.setZoom(11);
+
+  setTimeout(() => {
+    tripLayers.forEach(layerId => {
+      const features = map.querySourceFeatures('trips', { sourceLayer: layerId });
+
+      let tripDistance = 0;
+      let tripTime = 0;
+
+      features.forEach(feature => {
+        tripDistance += feature.properties.gps_distance_m || 0;
+        tripTime += feature.properties.time_diff_s || 0;
+      });
+
+      if (tripDistance > 0 || tripTime > 0) {
+        totalDistance += tripDistance;
+        totalTime += tripTime;
+        tripCount++;
+
+        const distanceKm = tripDistance / 1000;
+        const avgSpeed = tripTime > 0 ? (distanceKm / (tripTime / 3600)) : 0;
+
+        allTripData[layerId] = {
+          distanceKm: distanceKm.toFixed(2),
+          avgSpeed: avgSpeed.toFixed(1),
+          totalTime: tripTime
+        };
+
+        console.log(`${layerId}: ${distanceKm.toFixed(2)} km, ${tripTime}s`);
+      }
+    });
+
+    console.log(`Total: ${tripCount} trips, ${totalDistance}m, ${totalTime}s`);
+
+    const totalDistanceKm = (totalDistance / 1000).toFixed(1);
+    const avgSpeed = totalTime > 0 ? ((totalDistance / 1000) / (totalTime / 3600)).toFixed(1) : 0;
+
+    const totalHours = Math.floor(totalTime / 3600);
+    const totalMinutes = Math.floor((totalTime % 3600) / 60);
+    const totalTimeFormatted = totalHours > 0
+      ? `${totalHours}h ${totalMinutes}m`
+      : `${totalMinutes}m`;
+
+    document.getElementById('statTrips').textContent = tripLayers.length;
+    document.getElementById('statDistance').textContent = `${totalDistanceKm} km`;
+    document.getElementById('statAvgSpeed').textContent = `${avgSpeed} km/h`;
+    document.getElementById('statTotalTime').textContent = totalTimeFormatted;
+
+    map.setCenter(originalCenter);
+    map.setZoom(originalZoom);
+
+    tripStatsCalculated = true;
+  }, 1000);
 }
 
 function updateStats() {
-  const selectedTrip = document.getElementById('tripFilter').value;
-  const activeTrips = selectedTrip === 'all' ? tripLayers.length : 1;
-  
-  document.getElementById('statTrips').textContent = activeTrips;
-  document.getElementById('statAvgSpeed').textContent = '—';
+  document.getElementById('statTrips').textContent = tripLayers.length;
 }
