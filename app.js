@@ -97,27 +97,29 @@ function getTripStats(tripId) {
     return null;
   }
   
-  const meta = tripsMetadata[cleanTripId];
+  // Handle nested metadata structure
+  const tripData = tripsMetadata[cleanTripId];
+  const meta = tripData.metadata || tripData; // Support both nested and flat structures
   
   // Parse the GNSS line which has the actual stats
   // Format: ",Duration,Stops,Dist km,AVG km/h,AVGWOS km/h,MAX km/h,..."
-  // Example: ",07:12,04:34,1.536,13,35,25,,,,,89"
+  // Example: ",14:50,01:12,4.196,17,18,29,,,,,0"
   const gnssLine = meta['GNSS'];
   if (!gnssLine) {
-    console.warn('No GNSS data for trip:', tripId);
+    console.warn('No GNSS data for trip:', cleanTripId);
     return null;
   }
   
   const parts = gnssLine.split(',');
   
   return {
-    duration: parts[1], // "07:12"
-    stops: parts[2], // "04:34"
-    distance: parseFloat(parts[3]) || 0, // 1.536 km
-    avgSpeed: parseFloat(parts[4]) || 0, // 13 km/h
-    avgSpeedWOS: parseFloat(parts[5]) || 0, // 35 km/h (without stops)
-    maxSpeed: parseFloat(parts[6]) || 0, // 25 km/h
-    elevation: parseFloat(parts[11]) || 0 // 89 m
+    duration: parts[1], // "14:50"
+    stops: parts[2], // "01:12"
+    distance: parseFloat(parts[3]) || 0, // 4.196 km
+    avgSpeed: parseFloat(parts[4]) || 0, // 17 km/h
+    avgSpeedWOS: parseFloat(parts[5]) || 0, // 18 km/h (without stops)
+    maxSpeed: parseFloat(parts[6]) || 0, // 29 km/h
+    elevation: parseFloat(parts[11]) || 0 // 0 m
   };
 }
 
