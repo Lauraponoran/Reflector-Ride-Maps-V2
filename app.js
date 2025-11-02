@@ -132,6 +132,7 @@ function calculateAggregateStats() {
   
   let totalDistance = 0;
   let totalTime = 0; // in seconds
+  let totalAvgSpeed = 0;
   let tripCount = 0;
   
   Object.keys(tripsMetadata).forEach(tripId => {
@@ -144,9 +145,23 @@ function calculateAggregateStats() {
       const durationSeconds = (part1 * 60 + part2) * 60; // Assuming MM:SS format
       totalTime += durationSeconds;
       
+      // Sum up the average speeds from metadata
+      totalAvgSpeed += stats.avgSpeed;
+      
       tripCount++;
     }
   });
+  
+  // Average of the individual trip average speeds
+  const avgSpeed = tripCount > 0 ? (totalAvgSpeed / tripCount) : 0;
+  
+  return {
+    tripCount,
+    totalDistance: totalDistance.toFixed(1),
+    totalTime: formatDuration(totalTime),
+    avgSpeed: avgSpeed.toFixed(1)
+  };
+}
   
   const avgSpeed = totalTime > 0 ? (totalDistance / (totalTime / 3600)) : 0;
   
