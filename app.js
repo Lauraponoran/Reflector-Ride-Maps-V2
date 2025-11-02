@@ -56,26 +56,48 @@ function getSpeedColorExpression(mode) {
 
 // Load metadata
 async function loadMetadata() {
-  try {
-    // Adjust path as needed - could be '/trips_metadata.json' or at your server
-    const response = await fetch(`${CONFIG.DATA_URL || ''}/trips_metadata.json`);
-    tripsMetadata = await response.json();
-    console.log('✅ Loaded trip metadata for', Object.keys(tripsMetadata).length, 'trips');
-    return tripsMetadata;
-  } catch (err) {
-    console.warn('⚠️ Could not load metadata:', err);
-    return null;
+  // Try multiple possible paths
+  const possiblePaths = [
+    `${CONFIG.DATA_URL}/trips_metadata.json`,
+    '/trips_metadata.json',
+    './trips_metadata.json',
+    'trips_metadata.json'
+  ];
+  
+  for (const path of possiblePaths) {
+    try {
+      console.log('Trying to load metadata from:', path);
+      const response = await fetch(path);
+      if (response.ok) {
+        tripsMetadata = await response.json();
+        console.log('✅ Loaded trip metadata from', path, 'for', Object.keys(tripsMetadata).length, 'trips');
+        return tripsMetadata;
+      }
+    } catch (err) {
+      console.log('❌ Failed to load from', path);
+    }
   }
+  
+  console.warn('⚠️ Could not load metadata from any path. Please place trips_metadata.json in your project root or /Reflector-Ride-Maps-V2/ directory');
+  return null;
 }
 
 // Parse metadata for a specific trip
 function getTripStats(tripId) {
-  if (!tripsMetadata || !tripsMetadata[tripId]) {
-    console.warn('No metadata for trip:', tripId);
+  if (!tripsMetadata) {
+    console.warn('No metadata loaded');
     return null;
   }
   
-  const meta = tripsMetadata[tripId];
+  // Remove "_processed" suffix if present
+  const cleanTripId = tripId.replace(/_processed$/i, '');
+  
+  if (!tripsMetadata[cleanTripId]) {
+    console.warn('No metadata for trip:', tripId, '(cleaned:', cleanTripId + ')');
+    return null;
+  }
+  
+  const meta = tripsMetadata[cleanTripId];
   
   // Parse the GNSS line which has the actual stats
   // Format: ",Duration,Stops,Dist km,AVG km/h,AVGWOS km/h,MAX km/h,..."
@@ -170,7 +192,8 @@ map.on('load', async () => {
     const protocol = new pmtiles.Protocol();
     mapboxgl.addProtocol('pmtiles', protocol.tile);
     
-    const pmtilesUrl = `${window.location.origin}${CONFIG.PMTILES_URL}`;
+    // Use relative path for GitHub Pages
+    const pmtilesUrl = CONFIG.PMTILES_URL;
     const p = new pmtiles.PMTiles(pmtilesUrl);
     protocol.add(p);
     
