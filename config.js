@@ -9,13 +9,11 @@ if (typeof mapboxgl !== 'undefined') {
 }
 
 export const CONFIG = {
-  MAPBOX_TOKEN: MAPBOX_TOKEN,
-  PMTILES_URL: '/trips.pmtiles',
-  AGGREGATED_ROUTES_URL: '/aggregated_routes.geojson',
-  MAP_CENTER: [4.9, 52.37],
-  MAP_ZOOM: 11,
-  // Use an open style that works with MapLibre
-  MAP_STYLE: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
+  MAPBOX_TOKEN: '', // Not needed for OSM
+  MAP_STYLE: 'https://tiles.openfreemap.org/styles/dark-matter',
+  MAP_CENTER: [4.9041, 52.3676], // Amsterdam
+  MAP_ZOOM: 13,
+  PMTILES_URL: '/your-pmtiles-file.pmtiles'
 };
 
 // Also make available globally for non-module scripts
