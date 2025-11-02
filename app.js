@@ -162,16 +162,6 @@ function calculateAggregateStats() {
     avgSpeed: avgSpeed.toFixed(1)
   };
 }
-  
-  const avgSpeed = totalTime > 0 ? (totalDistance / (totalTime / 3600)) : 0;
-  
-  return {
-    tripCount,
-    totalDistance: totalDistance.toFixed(1),
-    totalTime: formatDuration(totalTime),
-    avgSpeed: avgSpeed.toFixed(1)
-  };
-}
 
 // Format seconds into readable duration
 function formatDuration(seconds) {
