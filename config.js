@@ -1,4 +1,5 @@
 // config.js
+// Updated version
 export const CONFIG = {
   MAPBOX_TOKEN: '', // Not needed for OSM
   MAP_STYLE: 'https://tiles.openfreemap.org/styles/dark-matter',
